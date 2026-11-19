@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epub2m4b"
+version = "0.1.0"
+description = "Chinese EPUB → chaptered M4B audiobook generator (CLI)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "soundbook authors" }]
+keywords = ["epub", "m4b", "audiobook", "tts", "chinese"]
+dependencies = [
+    "epub-extended==0.2.3",
+    "lxml>=5",
+    "click>=8",
+    "filelock>=3",
+]
+
+[project.optional-dependencies]
+kokoro = ["kokoro==0.9.4", "misaki[zh]==0.9.4"]
+
+[project.scripts]
+epub2m4b = "soundbook.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "corpus: local real-book corpus evaluation (never runs in CI)",
+    "e2e: end-to-end pipeline tests (real ffmpeg, --tts fake)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.setuptools.package-data]
+soundbook = ["py.typed"]

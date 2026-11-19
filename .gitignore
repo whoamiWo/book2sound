@@ -1,0 +1,20 @@
+.venv/
+.scratch/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+tests/fixtures/*.epub
+tests/fixtures/*.cover
+*.m4b
+*.flac
+*.ffmeta
+*.concat
+*.lock
+*.sqlite
+*.sqlite-*
+# local real-book corpus never enters the repo (legal rule)
+corpus/
