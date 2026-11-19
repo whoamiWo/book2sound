@@ -58,6 +58,12 @@ docker run --rm -v "$PWD:/data" epub2m4b run book.epub --tts fake -o book.m4b
 
 The image ships the core backends; Kokoro needs `pip install 'epub2m4b[kokoro]'` in a derived image.
 
+Two practical notes:
+
+- If `pypi.org` is unreachable from your Docker network, pass a mirror:
+  `docker build -t epub2m4b --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple .`
+- The container runs as root, so files it writes into a bind-mounted `/data` (the M4B, the cache, the SQLite state) are root-owned on the host. Use a named volume, or `--user "$(id -u):$(id -g)"` together with `-e SOUNDBOOK_HOME=/tmp/state -e SOUNDBOOK_CACHE_DIR=/tmp/cache`.
+
 ## Development
 
 ```bash
