@@ -52,6 +52,9 @@ class Document:
     index: int
     href: str
     blocks: tuple[DocBlock, ...]
+    #: Raw XHTML bytes of the spine document, kept so fragment anchors that no
+    #: block claims can be resolved with lxml (anchors.py path B).
+    payload: bytes = b""
 
     def block(self, idx: int) -> DocBlock | None:
         if 0 <= idx < len(self.blocks):
@@ -126,6 +129,15 @@ def _block_from_epubx(block, idx: int) -> DocBlock | None:
     )
 
 
+def _chapter_payload(book, chapter) -> bytes:
+    """Raw XHTML bytes for anchors.py path B; empty when unreadable."""
+
+    try:
+        return book.member(chapter.href)
+    except Exception:
+        return b""
+
+
 def load_book(path: str | Path) -> ParsedBook:
     """Open ``path`` and materialise every spine document.
 
@@ -160,7 +172,8 @@ def load_book(path: str | Path) -> ParsedBook:
                 # after silent blocks were filtered out.
                 blocks.append(replace(converted, idx=len(blocks)))
             documents.append(Document(index=chapter.index, href=chapter.href,
-                                      blocks=tuple(blocks)))
+                                      blocks=tuple(blocks),
+                                      payload=_chapter_payload(book, chapter)))
 
         # Image-only detection is lazy: it samples chapters on first access, so
         # this must be asked *after* the chapters above have been parsed (C4).

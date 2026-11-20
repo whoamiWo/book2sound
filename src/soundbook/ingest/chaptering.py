@@ -55,7 +55,7 @@ def _resolve_entry(book: ParsedBook, entry: NavEntry) -> _Pos | None:
         return None
     doc = book.documents[doc_i]
     if entry.anchor:
-        idx = resolve_anchor(doc, entry.anchor)
+        idx = resolve_anchor(doc, entry.anchor, payload=doc.payload or None)
         if idx is not None:
             return _Pos(doc=doc_i, block=idx)
     return _doc_start(book, doc_i)

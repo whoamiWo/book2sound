@@ -65,6 +65,27 @@ def _fail(message: str, code: int) -> None:
     raise SystemExit(code)
 
 
+def _artifact_is_fresh(artifact, sig: str, policies: Policies,
+                       cover_sha256: str | None) -> bool:
+    """True when the existing M4B was built with exactly these options."""
+
+    if artifact is None:
+        return False
+    opts = json.loads(artifact["build_opts"])
+    audio = policies.audio
+    return (
+        opts.get("content_sig") == sig
+        and opts.get("bitrate") == audio.bitrate
+        and opts.get("sample_rate") == audio.sample_rate
+        and opts.get("channels") == audio.channels
+        and opts.get("loudnorm") == audio.loudnorm
+        and opts.get("loudnorm_i") == audio.loudnorm_i
+        and opts.get("loudnorm_tp") == audio.loudnorm_tp
+        and opts.get("loudnorm_lra") == audio.loudnorm_lra
+        and opts.get("cover_sha256") == cover_sha256
+    )
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, prog_name=DIST_NAME)
 def cli() -> None:
@@ -412,9 +433,8 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
         sig = content_signature(db, book_id)
         if (artifact is not None and Path(artifact["output_path"]) == output
                 and output.is_file()
-                and json.loads(artifact["build_opts"]).get("content_sig") == sig
-                and json.loads(artifact["build_opts"]).get("bitrate") == policies.audio.bitrate
-                and json.loads(artifact["build_opts"]).get("loudnorm") == policies.audio.loudnorm):
+                and _artifact_is_fresh(artifact, sig, policies,
+                                       prepared.book.info.cover_sha256)):
             click.echo(f"up to date: {output}")
         else:
             try:

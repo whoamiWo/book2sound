@@ -1,5 +1,7 @@
 # epub2m4b
 
+[![CI](https://github.com/whoamiWo/book2sound/actions/workflows/ci.yml/badge.svg)](https://github.com/whoamiWo/book2sound/actions/workflows/ci.yml)
+
 Chinese EPUB → chaptered **M4B** audiobook, as a single resumable CLI.
 
 - **Chaptering**: nav → nav+hybrid → outline → spine, with a vetoer that rejects implausible cuts and records *why* (see `epub2m4b inspect --json`).
@@ -48,6 +50,11 @@ Exit codes: **0** success · **1** general error · **2** failed/incomplete segm
 
 A failed segment is retried on the next `run` — failure is not sticky.
 
+Kokoro notes: `kokoro==0.9.4` requires **Python < 3.13** (use the Docker image, which is
+3.12, if your system Python is newer). Model weights come from Hugging Face on first
+run; behind a firewall set `HF_ENDPOINT=https://hf-mirror.com` and
+`HF_HUB_DISABLE_XET=1` (the Xet CDN is not served by the mirror).
+
 ## Docker
 
 ```bash
@@ -68,7 +75,7 @@ Two practical notes:
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-python3 -m pip install -e . pytest
+python3 -m pip install -e ".[dev]"
 pytest                    # unit + e2e (real ffmpeg, --tts fake)
 pytest -m e2e             # only end-to-end
 pytest -m corpus          # local real-book corpus (never in CI)
