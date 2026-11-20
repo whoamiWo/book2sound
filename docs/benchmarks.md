@@ -56,4 +56,10 @@
 
 - 样本只有 10 个短段，且包含模型首次加载，**只记录观测值，不推算 RTF**。
 - 构建时使用了华为 PyPI 镜像；Hugging Face 需 `HF_ENDPOINT=https://hf-mirror.com` 加 `HF_HUB_DISABLE_XET=1`，否则 Xet CDN 下载挂起。
-- 当时的 `docker build` / `docker run` 完整命令**未留存**。仓库中的 `Dockerfile.kokoro` 是按已知事实复原的配方，未声称与当时镜像逐字一致。
+- 0.1.1 用仓库中提交的 `Dockerfile.kokoro` 复验通过，输出与上表一致（AAC 24 kHz 单声道，70.1 s，2 章）：
+  ```
+  docker build -f Dockerfile.kokoro --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple -t epub2m4b-kokoro .
+  docker run --rm -v "$PWD:/data" -e HF_ENDPOINT=https://hf-mirror.com -e HF_HUB_DISABLE_XET=1 \
+    epub2m4b-kokoro run sample.epub --tts kokoro -o sample.m4b
+  ```
+- 首次构建较慢的两个原因：ffmpeg 带来 133 MB apt 包（deb.debian.org 当时约 50 kB/s）；PyPI 默认的 torch 2.15.0 附带约 3 GB CUDA（`nvidia-*`）wheel。镜像最终约 10.5 GB。

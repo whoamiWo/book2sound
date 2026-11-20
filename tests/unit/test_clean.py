@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from soundbook.config import CleanPolicy
 from soundbook.ingest.clean import (
     clean_paragraphs,
@@ -8,8 +10,19 @@ from soundbook.ingest.clean import (
     repeated_headers,
     warnings_for_chapter,
 )
+from helpers import CHINESE_PARAGRAPHS
 
 POLICY = CleanPolicy()
+
+MESSY_SAMPLE = [
+    "  第一章　风雪夜归人  ",
+    "　　凌冽的寒风穿过山谷，　卷起漫天碎雪。",
+    "他握紧了手中的刀……",
+    "“你来晚了。”",
+    "请记住本站网址",
+    "123",
+    "他继续向前走。",
+]
 
 
 def _clean(paras, drop=frozenset()):
@@ -17,20 +30,21 @@ def _clean(paras, drop=frozenset()):
 
 
 def test_idempotent_on_messy_text():
-    messy = [
-        "  第一章　风雪夜归人  ",
-        "　　凌冽的寒风穿过山谷，　卷起漫天碎雪。",
-        "他握紧了手中的刀……",
-        "“你来晚了。”",
-        "请记住本站网址",
-        "123",
-        "他继续向前走。",
-    ]
-    once = _clean(messy)
+    once = _clean(MESSY_SAMPLE)
     twice = _clean(once)
     assert once == twice
     assert "123" not in once
     assert "请记住本站网址" not in once
+
+
+@pytest.mark.parametrize(
+    "sample",
+    [[paragraph] for paragraph in CHINESE_PARAGRAPHS] + [MESSY_SAMPLE],
+    ids=[f"chinese-{i}" for i in range(len(CHINESE_PARAGRAPHS))] + ["messy"],
+)
+def test_idempotent_on_samples(sample):
+    once = _clean(sample)
+    assert _clean(once) == once
 
 
 def test_whitespace_and_fullwidth_collapsed():

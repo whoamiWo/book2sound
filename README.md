@@ -63,7 +63,7 @@ docker run --rm -v "$PWD:/data" epub2m4b inspect book.epub
 docker run --rm -v "$PWD:/data" epub2m4b run book.epub --tts fake -o book.m4b
 ```
 
-The default image ships the core backends only. For the local Kokoro engine use `Dockerfile.kokoro` (Python 3.12, installs `.[kokoro]`; reconstructed recipe, see the comments at its top):
+The default image ships the core backends only. For the local Kokoro engine use `Dockerfile.kokoro` (Python 3.12, installs `.[kokoro]`; validated end to end, see [docs/benchmarks.md](docs/benchmarks.md) Spike 2):
 
 ```bash
 docker build -f Dockerfile.kokoro -t epub2m4b-kokoro .
@@ -86,7 +86,7 @@ python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install -e ".[dev]"
 pytest                    # unit + e2e (real ffmpeg, --tts fake)
 pytest -m e2e             # only end-to-end
-pytest -m corpus          # local real-book corpus (never in CI)
+pytest -m corpus          # reserved for 0.2.0, needs SOUNDBOOK_CORPUS_DIR (selects nothing today)
 ```
 
 Docs: [`docs/adr.md`](docs/adr.md) (decision records), [`docs/limitations.md`](docs/limitations.md), [`docs/benchmarks.md`](docs/benchmarks.md), [`docs/compare.md`](docs/compare.md), [`docs/licenses.md`](docs/licenses.md).

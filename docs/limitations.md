@@ -24,7 +24,7 @@
 ## 合成侧
 
 - `--tts fake` 产生**纯静音**，因此 loudnorm 自动关闭（`allow_loudnorm=False`）。e2e/CI 全部走这条路径。
-- `--tts kokoro` 需要 `pip install 'epub2m4b[kokoro]'`（kokoro 0.9.4 + `misaki[zh]` 0.9.4）；本机未下载模型，代码路径按 ADR-003 实现但未经实测。
+- `--tts kokoro` 需要 `pip install 'epub2m4b[kokoro]'`（kokoro 0.9.4 + `misaki[zh]` 0.9.4）；kokoro 要求 Python < 3.13，宿主 Python 更新时用 `Dockerfile.kokoro`（3.12）。已在容器内跑通端到端（见 `docs/benchmarks.md` 的 Spike 2），纯 CPU 速度慢。
 - `--tts openai_compat` 依赖用户自备的 OpenAI 兼容 `/v1/audio/speech` 端点，默认 `http://127.0.0.1:8000/v1`；WAV 响应由 ffmpeg 解码重采样到 24 kHz mono。
 - 采样数以 FLAC STREAMINFO 回读为准；不一致 → 段标 `failed`，绝不按文件大小推断。
 - 每段最多 `--max-retries` 次（默认 3），仍失败则标 `failed` 并继续；`run` 默认以退出码 2 结束，`--allow-incomplete` 会封装已完成部分但仍返回 2（ADR-018）。

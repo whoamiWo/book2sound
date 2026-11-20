@@ -1,8 +1,9 @@
 """Paragraph cleaning: eight steps, list in → list out, idempotent (spec §7).
 
 Idempotence is a contract, not an accident: ``clean(clean(x)) == clean(x)`` is
-checked by a property test over the fixture corpus.  Anything that cannot be
-made idempotent does not belong here.
+covered by ``tests/unit/test_clean.py::test_idempotent_on_samples``, which is
+parametrized over the fixture paragraphs and a messy sample.  Anything that
+cannot be made idempotent does not belong here.
 """
 
 from __future__ import annotations

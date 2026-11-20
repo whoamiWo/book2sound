@@ -1,5 +1,5 @@
-# epub2m4b + local Kokoro engine. Reconstructed recipe: the exact image used in
-# spike 2 was not preserved. kokoro==0.9.4 requires Python < 3.13.
+# epub2m4b + local Kokoro engine. Validated end to end for 0.1.1 (see
+# docs/benchmarks.md, Spike 2). kokoro==0.9.4 requires Python < 3.13.
 #   docker build -f Dockerfile.kokoro -t epub2m4b-kokoro .
 #   docker build -f Dockerfile.kokoro --build-arg PIP_INDEX_URL=<mirror> -t epub2m4b-kokoro .
 # Behind a firewall run with: -e HF_ENDPOINT=https://hf-mirror.com -e HF_HUB_DISABLE_XET=1

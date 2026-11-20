@@ -140,3 +140,14 @@ v5 计划 §3.9 把 spike 3 降级为安装检查：`soundfile` 不可用则段�
 - **B 级收紧**：`MIN_PREFIX_MATCH_CHARS=4`，较短一侧不足 4 字时只允许相等；`lxml_anchors` 加 `lru_cache(maxsize=32)`，避免对每个条目重复解析整份文档。
 - **不吞理由**：`_build_drafts` 的位置去重与空章过滤会把被丢弃候选的理由并入下一个保留章节；`choose_strategy` 把 veto 拒因追加到 `draft.rejected`，不再整体覆盖。
 - **呈现**：`anchor_*` 并入 `ChapterPlan.warnings`，不新增顶层字段。`inspect` 文本模式单独打印 warnings 并让 `rejected` 行排除 `anchor_*`，因为降级切分不是策略被否决；`--json` 的 `rejected` 与 `warnings` 都保留 `anchor_*`。`run` 在 prepare 之后向 stderr 输出 `warning: chapter N: anchor_*`。
+
+## ADR-021 发布走 PyPI Trusted Publishing，不再保存 API token
+
+2026-11-20。0.1.0 上传时 TestPyPI token 被误存为 PyPI token，导致 403；同时账号级 token 权限过宽。
+
+- **机制**：`.github/workflows/release.yml` 在 push `v*` tag 时触发。`build` job 只构建一次 `dist/`，校验 tag、`pyproject.toml` 版本与 wheel 内 `soundbook.__version__` 三者一致；`testpypi` 与 `pypi` job 下载同一份 artifact 上传，保证两侧逐字节相同。
+- **鉴权**：GitHub OIDC（`permissions: id-token: write` 仅给两个上传 job，工作流顶层为 `contents: read`），仓库与 GitHub secrets 中不存放任何长期凭据。
+- **人工闸门**：`pypi` job 依赖 `testpypi`，并使用 GitHub environment `pypi` 的手动批准，作为不可逆上传前的确认。
+- **供应链**：`actions/*` 与 `pypa/gh-action-pypi-publish` 均固定到具体 commit SHA，不用浮动 tag。
+- **前置（网页配置）**：PyPI 与 TestPyPI 的 `epub2m4b` 项目各添加一个 Trusted Publisher（owner `whoamiWo`、repo `book2sound`、workflow `release.yml`、environment 分别为 `pypi` / `testpypi`），GitHub 仓库创建同名 environment。配置生效后撤销账号级 token 与 TestPyPI token。
+- **失败处理**：tag 先于上传创建；若 `build` 或 `testpypi` 失败，修复后发下一个补丁版本，不移动已推送的 tag。若仅 `pypi` job 失败（`testpypi` 已成功），在 GitHub 上只 Re-run failed jobs——整条重跑会因 TestPyPI 拒绝重复文件名而失败。
