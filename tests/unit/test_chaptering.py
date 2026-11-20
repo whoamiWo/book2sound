@@ -86,3 +86,169 @@ def test_front_matter_flagged(tmp_path):
     assert drafts[0].skippable is True   # 目录
     assert drafts[1].skippable is True   # 序言
     assert not any(d.skippable for d in drafts[2:])
+
+
+def _path_c_drafts(tmp_path, nav_entries, *, headings=()):
+    chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
+    chapters[1].headings = list(headings)
+    make_epub(tmp_path / "c.epub", chapters, nav_entries=nav_entries)
+    book = load_book(tmp_path / "c.epub")
+    strategy, drafts = choose_strategy(book, ChapteringPolicy())
+    assert strategy == "nav"
+    keys = [d.start_key for d in drafts]
+    assert keys == sorted(keys, key=key_order)
+    assert len(set(keys)) == len(keys)
+    return drafts
+
+
+def _rejection(draft, reason):
+    return next((r for r in draft.rejected if r.reason == reason), None)
+
+
+def test_path_c_exact_heading_match(tmp_path):
+    drafts = _path_c_drafts(
+        tmp_path,
+        [("第1章", "Text/ch1.xhtml"), ("第2章", "Text/ch2.xhtml"),
+         ("第三节 初入江湖", "Text/ch2.xhtml#nope"),
+         ("第3章", "Text/ch3.xhtml"), ("第4章", "Text/ch4.xhtml")],
+        headings=["第三节 初入江湖"])
+    assert len(drafts) == 5
+    cut = drafts[2]
+    assert cut.start_key == "OEBPS/Text/ch2.xhtml|2"  # the h2 block, not doc start
+    assert cut.title == "第三节 初入江湖"
+    rej = _rejection(cut, "anchor_text_fallback")
+    assert rej is not None
+    assert rej.metrics["match"] == "exact"
+    assert rej.metrics["anchor"] == "nope"
+    assert _rejection(cut, "anchor_unresolved") is None
+
+
+def test_path_c_unresolved_keeps_doc_start_and_records_it(tmp_path):
+    drafts = _path_c_drafts(
+        tmp_path,
+        [("第1章", "Text/ch1.xhtml"), ("第2章", "Text/ch2.xhtml"),
+         ("不存在的标题", "Text/ch3.xhtml#nope"),
+         ("第4章", "Text/ch4.xhtml")])
+    assert len(drafts) == 4
+    cut = drafts[2]
+    assert cut.start_key == "OEBPS/Text/ch3.xhtml|0"
+    rej = _rejection(cut, "anchor_unresolved")
+    assert rej is not None
+    assert rej.metrics["match"] == "doc_start"
+    assert rej.metrics["href"] == "OEBPS/Text/ch3.xhtml"
+    assert _rejection(cut, "anchor_text_fallback") is None
+
+
+def test_path_c_reason_survives_position_dedupe(tmp_path):
+    """Trap A: a candidate dropped by `flat <= flat_starts[-1]` keeps its reason."""
+    from soundbook.ingest.chaptering import _build_drafts, _Candidate, _Pos
+
+    chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(3)]
+    make_epub(tmp_path / "d.epub", chapters)
+    book = load_book(tmp_path / "d.epub")
+    cands = [
+        _Candidate(pos=_Pos(0, 0), label="第1章", depth=0, source="nav"),
+        _Candidate(pos=_Pos(1, 0), label="第2章", depth=0, source="nav"),
+        # same flat position as the previous one -> dropped by dedupe
+        _Candidate(pos=_Pos(1, 0), label="丢失", depth=0, source="nav",
+                   reason="anchor_unresolved", anchor="x", match="doc_start"),
+        _Candidate(pos=_Pos(2, 0), label="第3章", depth=0, source="nav"),
+    ]
+    drafts = _build_drafts(book, cands, "nav")
+    assert len(drafts) == 3
+    reasons = [(d.idx, r.reason) for d in drafts for r in d.rejected]
+    assert reasons == [(2, "anchor_unresolved")]  # moved to the next kept chapter
+
+
+def test_path_c_reason_survives_empty_chapter_filter(tmp_path):
+    """Trap C: a zero-char chapter is dropped, its reason moves to a neighbour."""
+    from soundbook.ingest.chaptering import _build_drafts, _Candidate, _Pos
+
+    chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(3)]
+    make_epub(tmp_path / "e.epub", chapters)
+    book = load_book(tmp_path / "e.epub")
+    # ch1's h1 alone is a heading-only span (the title is spoken separately),
+    # so cuts at (0, 0) and (0, 1) yield a zero-char first chapter.
+    cands = [
+        _Candidate(pos=_Pos(0, 0), label="第1章", depth=0, source="nav",
+                   reason="anchor_text_fallback", anchor="y", match="exact"),
+        _Candidate(pos=_Pos(0, 1), label="正文", depth=0, source="nav"),
+        _Candidate(pos=_Pos(1, 0), label="第2章", depth=0, source="nav"),
+    ]
+    drafts = _build_drafts(book, cands, "nav")
+    assert len(drafts) == 2  # the empty chapter was dropped
+    assert [r.reason for r in drafts[0].rejected] == ["anchor_text_fallback"]
+    assert drafts[1].rejected == ()
+
+
+def test_choose_strategy_merges_veto_with_path_c_reasons(tmp_path):
+    """Trap B: veto reasons are appended to, not replacing, path C records."""
+    chapters = [
+        Chapter("第1章 短", CHINESE_PARAGRAPHS[:1]),
+        Chapter("第2章 长", CHINESE_PARAGRAPHS * 80),
+        Chapter("第3章", CHINESE_PARAGRAPHS[:2]),
+    ]
+    make_epub(tmp_path / "m.epub", chapters,
+              nav_entries=[("第1章", "Text/ch1.xhtml"),
+                           ("不存在的标题", "Text/ch2.xhtml#nope"),
+                           ("第3章", "Text/ch3.xhtml")])
+    book = load_book(tmp_path / "m.epub")
+    strategy, drafts = choose_strategy(book, ChapteringPolicy())
+    reasons = {r.reason for d in drafts for r in d.rejected}
+    assert "dominant_chapter" in reasons
+    assert strategy in {"nav+hybrid", "outline", "spine"}  # nav itself was vetoed
+
+
+def test_veto_rejections_are_appended_to_path_c_records(tmp_path, monkeypatch):
+    """Trap B, deterministic: nav is vetoed, nav+hybrid wins and keeps both records."""
+    import soundbook.ingest.chaptering as ch
+    from soundbook.models import Rejection
+
+    chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
+    make_epub(tmp_path / "t.epub", chapters,
+              nav_entries=[("第1章", "Text/ch1.xhtml"),
+                           ("不存在的标题", "Text/ch2.xhtml#nope"),
+                           ("第3章", "Text/ch3.xhtml"),
+                           ("第4章", "Text/ch4.xhtml")])
+    book = load_book(tmp_path / "t.epub")
+
+    real_hybrid = ch._hybrid_candidates
+
+    def fake_hybrid(b):
+        merged = real_hybrid(b)
+        extra = ch._Candidate(pos=ch._Pos(3, 1), label="额外", depth=1, source="outline")
+        return sorted([*merged, extra], key=lambda c: (c.pos.doc, c.pos.block))
+
+    calls = {"n": 0}
+
+    def fake_veto(drafts, policy):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return [Rejection("?", "dominant_chapter", {})]
+        return []
+
+    monkeypatch.setattr(ch, "_hybrid_candidates", fake_hybrid)
+    monkeypatch.setattr(ch, "_veto", fake_veto)
+    strategy, drafts = choose_strategy(book, ChapteringPolicy())
+    assert strategy == "nav+hybrid"
+    carrier = next(d for d in drafts
+                   if any(r.reason == "anchor_unresolved" for r in d.rejected))
+    reasons = [r.reason for r in carrier.rejected]
+    assert "dominant_chapter" in reasons  # veto reason appended, not overwritten
+    assert reasons.count("anchor_unresolved") == 1
+
+
+def test_path_c_normalizes_label_before_matching(tmp_path):
+    # The loader collapses U+3000 to a plain space; heading has none, so the
+    # fallback must drop all whitespace on both sides.
+    drafts = _path_c_drafts(
+        tmp_path,
+        [("第1章", "Text/ch1.xhtml"), ("第2章", "Text/ch2.xhtml"),
+         ("\u3000第三节\u3000初入江湖\u3000", "Text/ch2.xhtml#nope"),
+         ("第3章", "Text/ch3.xhtml"), ("第4章", "Text/ch4.xhtml")],
+        headings=["第三节初入江湖"])
+    assert len(drafts) == 5
+    assert drafts[2].start_key == "OEBPS/Text/ch2.xhtml|2"
+    rej = _rejection(drafts[2], "anchor_text_fallback")
+    assert rej is not None
+    assert rej.metrics["match"] == "exact"

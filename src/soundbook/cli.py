@@ -227,9 +227,18 @@ def inspect(book: str, as_json: bool, include_front_matter: bool) -> None:
         click.echo(f"  note        {len(info.obfuscated_fonts)} obfuscated font(s); text readable")
     if info.cover_sha256:
         click.echo(f"  cover       {info.cover_sha256[:16]}…")
-    rejected = {r.reason for c in chapters for r in c.draft.rejected}
+    # anchor_* records are degraded cuts, not a vetoed strategy: report separately.
+    rejected = {r.reason for c in chapters for r in c.draft.rejected
+                if not r.reason.startswith("anchor_")}
     if rejected:
         click.echo(f"  rejected    {', '.join(sorted(rejected))}")
+    chapter_warnings = [(c.draft.idx, w) for c in chapters for w in c.warnings]
+    if chapter_warnings:
+        click.echo(f"  warnings    {len(chapter_warnings)}")
+        for idx, text in chapter_warnings[:5]:
+            click.echo(f"    [{idx:>3}] {text}")
+        if len(chapter_warnings) > 5:
+            click.echo(f"    … {len(chapter_warnings) - 5} more")
     for c in chapters[:5]:
         click.echo(f"    [{c.draft.idx:>3}] {c.draft.title[:40]:<40} "
                    f"{c.draft.char_count:>7} chars  {len(c.segments):>4} segs")
@@ -387,6 +396,10 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
                            include_skippable=include_front_matter,
                            write_segments=True, synth_fp=synth_fp)
         book_id = prepared.book.info.book_id
+        for plan in prepared.chapters:
+            for text in plan.warnings:
+                if text.startswith("anchor_"):
+                    click.echo(f"warning: chapter {plan.draft.idx}: {text}", err=True)
         lock = FileLock(str(config.locks_dir() / f"{book_id}.lock"))
         lock.acquire(timeout=0)
 

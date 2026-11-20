@@ -1,0 +1,31 @@
+# epub2m4b + local Kokoro engine. Reconstructed recipe: the exact image used in
+# spike 2 was not preserved. kokoro==0.9.4 requires Python < 3.13.
+#   docker build -f Dockerfile.kokoro -t epub2m4b-kokoro .
+#   docker build -f Dockerfile.kokoro --build-arg PIP_INDEX_URL=<mirror> -t epub2m4b-kokoro .
+# Behind a firewall run with: -e HF_ENDPOINT=https://hf-mirror.com -e HF_HUB_DISABLE_XET=1
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    SOUNDBOOK_HOME=/data/state \
+    SOUNDBOOK_CACHE_DIR=/data/cache \
+    HF_HOME=/data/hf
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_TIMEOUT=120
+
+WORKDIR /app
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN pip install --index-url "$PIP_INDEX_URL" --timeout "$PIP_TIMEOUT" --retries 5 ".[kokoro]" \
+ && rm -rf /app/src
+
+VOLUME ["/data"]
+WORKDIR /data
+
+ENTRYPOINT ["epub2m4b"]
+CMD ["--help"]

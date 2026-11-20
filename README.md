@@ -63,7 +63,15 @@ docker run --rm -v "$PWD:/data" epub2m4b inspect book.epub
 docker run --rm -v "$PWD:/data" epub2m4b run book.epub --tts fake -o book.m4b
 ```
 
-The image ships the core backends; Kokoro needs `pip install 'epub2m4b[kokoro]'` in a derived image.
+The default image ships the core backends only. For the local Kokoro engine use `Dockerfile.kokoro` (Python 3.12, installs `.[kokoro]`; reconstructed recipe, see the comments at its top):
+
+```bash
+docker build -f Dockerfile.kokoro -t epub2m4b-kokoro .
+docker run --rm -v "$PWD:/data" -e HF_ENDPOINT=https://hf-mirror.com -e HF_HUB_DISABLE_XET=1 \
+  epub2m4b-kokoro run book.epub --tts kokoro -o book.m4b
+```
+
+The `HF_*` variables are only needed behind a firewall. The Kokoro image is large (about 10.5 GB with torch).
 
 Two practical notes:
 

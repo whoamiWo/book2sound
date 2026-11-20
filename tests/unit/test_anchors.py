@@ -52,6 +52,49 @@ def test_unknown_anchor_returns_none():
     assert resolve_anchor(doc, "missing", payload=doc.payload) is None
 
 
+def _short_prefix_doc() -> Document:
+    blocks = (
+        DocBlock(idx=0, kind="paragraph", text="序"),
+        DocBlock(idx=1, kind="paragraph", text=CHINESE_PARAGRAPHS[1]),
+        DocBlock(idx=2, kind="paragraph", text=CHINESE_PARAGRAPHS[2]),
+    )
+    return Document(index=0, href="x", blocks=blocks)
+
+
+def test_path_b_short_block_prefix_is_not_prefix_matched():
+    """A one-character block must not absorb an anchor whose text merely starts with it."""
+    doc = _short_prefix_doc()
+    payload = (
+        "<html><body><p>序</p>"
+        f"<p>{CHINESE_PARAGRAPHS[1]}</p>"
+        f"<p><span id=\"t\">序章 {CHINESE_PARAGRAPHS[3]}</span></p>"
+        "</body></html>"
+    ).encode()
+    # 'wanted' starts with the lone '序' block text, but the shorter side has 1 char.
+    assert resolve_anchor(doc, "t", payload=payload) is None
+
+
+def test_path_b_long_prefix_still_aligns():
+    doc = _short_prefix_doc()
+    payload = (
+        "<html><body><p>序</p>"
+        f"<p>{CHINESE_PARAGRAPHS[1]}</p>"
+        f"<p><span id=\"m\">{CHINESE_PARAGRAPHS[2]}</span></p>"
+        "</body></html>"
+    ).encode()
+    assert resolve_anchor(doc, "m", payload=payload) == 2
+
+
+def test_lxml_anchors_is_cached_per_payload():
+    from soundbook.ingest.anchors import lxml_anchors
+
+    payload = b"<html><body><p id=\"a\">text here</p></body></html>"
+    lxml_anchors.cache_clear()
+    first = lxml_anchors(payload)
+    assert lxml_anchors(payload) is first
+    assert lxml_anchors.cache_info().hits >= 1
+
+
 def test_loader_stores_chapter_payload(tmp_path):
     book = load_book(simple_book(tmp_path / "b.epub"))
     assert all(doc.payload.startswith(b"<?xml") for doc in book.documents)

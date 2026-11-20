@@ -84,7 +84,7 @@ PyPI 上 `soundbook` 已被占用（0.0.4，erfansamandarian，2024-06），且�
 
 1. **A（首选）**：用 `dom_ids → block ordinal` 索引解析 `href#anchor`。
 2. **B（兜底）**：A 区没有该 anchor 时，用 lxml 直接解析 `book.resource(spine_href).read()` 得到的字节，取 `//*[@id]` 出现顺序，与 epubx block 序列按"归一化后 20 字前缀"对齐。
-3. **C（降级）**：仍对不齐时，在该 `href` 文件内按 nav 标题文本匹配 heading block，标记 `strategy=nav+hybrid` 并把原因写进 `rejected`。**绝不允许静默退化成"整文件当一章"**。
+3. **C（降级）**：仍对不齐时，在该 `href` 文件内按 nav 标题文本匹配 heading block，把原因写进 `rejected`。**绝不允许静默退化成"整文件当一章"**。实现细节见 ADR-020（2026-11-20 修订：匹配规则、理由取值与 B 级 4 字约束以 ADR-020 为准）。
 
 `spine_href` 一律使用 `book.spine` 的原始相对路径（不用 `ch.id`）；跨文件边界靠 `spine_href` 区分。
 
@@ -129,3 +129,14 @@ v5 计划 §3.9 把 spike 3 降级为安装检查：`soundfile` 不可用则段�
 `tts/voices.py` 内置 Kokoro-82M 音色表（仅 id/语言/性别元数据，无权重无音频），
 `lang_code_for()` 按音色前缀推导，未知音色回退 `z`，`SOUNDBOOK_KOKORO_LANG` 可覆盖。
 `epub2m4b voices [--lang z] [--json]` 不下载模型即可列出。
+
+## ADR-020 分章锚点降级（路径 C）：按标题文本回退，理由随章节记录
+
+2026-11-20。ADR-015 第 3 级的落地决定，并修订 B 级。
+
+- **回退位置**：只在 `chaptering._resolve_entry` 的 nav/outline 条目层。`anchors.resolve_anchor` 返回 None 的语义不变（该文档内无法定义此锚点，调用方当作文档首块）。
+- **匹配规则**：`_match_heading` 在目标文档的 heading 中先做空白归一化后的精确匹配；其次才做前缀匹配，且两侧都必须不少于 4 字，避免单字标题（如“序”）误对齐。
+- **理由取值**：`anchor_text_fallback`（按标题文本找到）和 `anchor_unresolved`（找不到，在文档起点切分）。写入 `Rejection(strategy, reason, {anchor,label,href,match})`。
+- **B 级收紧**：`MIN_PREFIX_MATCH_CHARS=4`，较短一侧不足 4 字时只允许相等；`lxml_anchors` 加 `lru_cache(maxsize=32)`，避免对每个条目重复解析整份文档。
+- **不吞理由**：`_build_drafts` 的位置去重与空章过滤会把被丢弃候选的理由并入下一个保留章节；`choose_strategy` 把 veto 拒因追加到 `draft.rejected`，不再整体覆盖。
+- **呈现**：`anchor_*` 并入 `ChapterPlan.warnings`，不新增顶层字段。`inspect` 文本模式单独打印 warnings 并让 `rejected` 行排除 `anchor_*`，因为降级切分不是策略被否决；`--json` 的 `rejected` 与 `warnings` 都保留 `anchor_*`。`run` 在 prepare 之后向 stderr 输出 `warning: chapter N: anchor_*`。

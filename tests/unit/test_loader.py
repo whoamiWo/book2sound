@@ -69,6 +69,10 @@ def test_nav_anchor_maps_to_block(tmp_path):
     assert entry.label == "第3章 中段"
     from soundbook.ingest.chaptering import _resolve_entry
 
-    pos = _resolve_entry(book, entry)
+    resolved = _resolve_entry(book, entry)
+    assert resolved is not None
+    pos, reason, match = resolved
     assert pos.doc == 2
     assert pos.block >= 3
+    assert reason is None  # resolved by path A, no degradation record
+    assert match is None

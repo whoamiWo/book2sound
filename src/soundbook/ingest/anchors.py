@@ -13,12 +13,14 @@ the block parser drops entirely (empty anchors).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from lxml import etree
 
 from soundbook.ingest.loader import Document
 
 PREFIX_CHARS = 20
+MIN_PREFIX_MATCH_CHARS = 4
 
 
 def normalize_prefix(text: str, length: int = PREFIX_CHARS) -> str:
@@ -41,6 +43,7 @@ class Anchor:
     prefix: str
 
 
+@lru_cache(maxsize=32)
 def lxml_anchors(payload: bytes) -> tuple[Anchor, ...]:
     """Every ``//*[@id]`` in document order, with its text prefix (path B)."""
 
@@ -84,6 +87,14 @@ def resolve_anchor(
     wanted_prefix = normalize_prefix(wanted.prefix, prefix_chars)
     for block in doc.blocks:
         block_prefix = normalize_prefix(block.text, prefix_chars)
-        if block_prefix and (block_prefix.startswith(wanted_prefix) or wanted_prefix.startswith(block_prefix)):
+        if not block_prefix:
+            continue
+        if block_prefix == wanted_prefix:
+            return block.idx
+        # Prefix alignment is only trustworthy when the shorter side carries
+        # enough characters; a lone "序" would otherwise match the first block.
+        if (min(len(block_prefix), len(wanted_prefix)) >= MIN_PREFIX_MATCH_CHARS
+                and (block_prefix.startswith(wanted_prefix)
+                     or wanted_prefix.startswith(block_prefix))):
             return block.idx
     return None

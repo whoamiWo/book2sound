@@ -32,6 +32,11 @@ class _Candidate:
     label: str
     depth: int
     source: str  # "nav" | "outline" | "spine"
+    #: ADR-015 path C: why this cut is not the anchor the book asked for.
+    #: ``None`` for clean cuts; else ``anchor_text_fallback`` / ``anchor_unresolved``.
+    reason: str | None = None
+    anchor: str | None = None
+    match: str | None = None  # "exact" | "prefix" | "doc_start"
 
 
 def _flatten_positions(book: ParsedBook) -> list[_Pos]:
@@ -47,7 +52,45 @@ def _doc_start(book: ParsedBook, doc_i: int) -> _Pos | None:
     return _Pos(doc=doc_i, block=doc.blocks[0].idx) if doc.blocks else None
 
 
-def _resolve_entry(book: ParsedBook, entry: NavEntry) -> _Pos | None:
+_MIN_PREFIX_CHARS = 4
+
+
+def _squash(text: str) -> str:
+    """Drop every whitespace char, including U+3000, for label matching."""
+
+    return "".join(text.split())
+
+
+def _match_heading(doc, label: str) -> tuple[int, str] | None:
+    """ADR-015 path C: find the heading block whose text is the nav label.
+
+    Exact (whitespace-insensitive) match wins; otherwise the first prefix match,
+    allowed only when both sides have at least ``_MIN_PREFIX_CHARS`` characters.
+    """
+
+    wanted = _squash(label)
+    if not wanted:
+        return None
+    headings = [(b.idx, _squash(b.text)) for b in doc.headings]
+    for idx, text in headings:
+        if text == wanted:
+            return idx, "exact"
+    for idx, text in headings:
+        if (len(wanted) >= _MIN_PREFIX_CHARS and len(text) >= _MIN_PREFIX_CHARS
+                and (text.startswith(wanted) or wanted.startswith(text))):
+            return idx, "prefix"
+    return None
+
+
+def _resolve_entry(book: ParsedBook,
+                   entry: NavEntry) -> tuple[_Pos, str | None, str | None] | None:
+    """Resolve an entry to ``(pos, reason, match)``.
+
+    ``reason`` is ``None`` for a clean cut, ``anchor_text_fallback`` when path C
+    found the heading by its label, ``anchor_unresolved`` when the cut stays at
+    the document start because nothing could place the anchor.
+    """
+
     if not entry.href:
         return None
     doc_i = book.doc_index(entry.href)
@@ -57,8 +100,16 @@ def _resolve_entry(book: ParsedBook, entry: NavEntry) -> _Pos | None:
     if entry.anchor:
         idx = resolve_anchor(doc, entry.anchor, payload=doc.payload or None)
         if idx is not None:
-            return _Pos(doc=doc_i, block=idx)
-    return _doc_start(book, doc_i)
+            return _Pos(doc=doc_i, block=idx), None, None
+        hit = _match_heading(doc, entry.label)
+        if hit is not None:
+            return _Pos(doc=doc_i, block=hit[0]), "anchor_text_fallback", hit[1]
+        start = _doc_start(book, doc_i)
+        if start is None:
+            return None
+        return start, "anchor_unresolved", "doc_start"
+    start = _doc_start(book, doc_i)
+    return (start, None, None) if start is not None else None
 
 
 def _candidates(book: ParsedBook, entries: tuple[NavEntry, ...], source: str) -> list[_Candidate]:
@@ -66,13 +117,17 @@ def _candidates(book: ParsedBook, entries: tuple[NavEntry, ...], source: str) ->
 
     by_pos: dict[tuple[int, int], _Candidate] = {}
     for entry in entries:
-        pos = _resolve_entry(book, entry)
-        if pos is None:
+        resolved = _resolve_entry(book, entry)
+        if resolved is None:
             continue
+        pos, reason, match = resolved
         key = (pos.doc, pos.block)
         prev = by_pos.get(key)
         if prev is None or entry.depth > prev.depth:
-            by_pos[key] = _Candidate(pos=pos, label=entry.label, depth=entry.depth, source=source)
+            by_pos[key] = _Candidate(
+                pos=pos, label=entry.label, depth=entry.depth, source=source,
+                reason=reason, anchor=entry.anchor if reason else None, match=match,
+            )
     return [by_pos[k] for k in sorted(by_pos)]
 
 
@@ -119,6 +174,47 @@ def _title_for(book: ParsedBook, cand: _Candidate, index: int, zh: bool) -> str:
     return f"第{index + 1}章" if zh else f"Chapter {index + 1}"
 
 
+def _candidate_rejections(book: ParsedBook, cand: _Candidate,
+                          strategy: str) -> list[Rejection]:
+    """Path C record for one candidate: the cut is a degraded anchor, not a veto."""
+
+    if not cand.reason:
+        return []
+    href = book.documents[cand.pos.doc].href
+    return [Rejection(strategy, cand.reason, {
+        "anchor": cand.anchor,
+        "label": cand.label,
+        "href": href,
+        "match": cand.match,
+    })]
+
+
+def _drop_empty(drafts: list[ChapterDraft]) -> list[ChapterDraft]:
+    """Drop zero-char chapters but keep their rejections (trap C).
+
+    A dropped chapter's rejections move to the next kept chapter, or to the
+    previous kept one when nothing follows. Behaviour is otherwise unchanged:
+    if every draft is empty the list is returned as-is.
+    """
+
+    kept = [d for d in drafts if d.char_count > 0]
+    if not kept:
+        return drafts
+    carry: tuple[Rejection, ...] = ()
+    out: list[ChapterDraft] = []
+    for d in drafts:
+        if d.char_count > 0:
+            if carry:
+                d.rejected = carry + d.rejected
+                carry = ()
+            out.append(d)
+        else:
+            carry = carry + d.rejected
+    if carry:
+        out[-1].rejected = out[-1].rejected + carry
+    return out
+
+
 def _build_drafts(book: ParsedBook, candidates: list[_Candidate],
                   strategy: str) -> list[ChapterDraft]:
     """Cut the global block stream at candidate positions."""
@@ -128,21 +224,38 @@ def _build_drafts(book: ParsedBook, candidates: list[_Candidate],
                                                for i, p in enumerate(positions)}
     flat_starts: list[int] = []
     keep: list[_Candidate] = []
+    # Degradation reasons per kept candidate; a candidate dropped by position
+    # dedupe must not take its reason with it (trap A).
+    kept_reasons: list[list[Rejection]] = []
+    pending: list[Rejection] = []
     for cand in candidates:
         flat = pos_to_flat.get((cand.pos.doc, cand.pos.block))
+        own = _candidate_rejections(book, cand, strategy)
         if flat is None:
+            pending.extend(own)
             continue
         if flat_starts and flat <= flat_starts[-1]:
+            pending.extend(own)
             continue
         flat_starts.append(flat)
         keep.append(cand)
+        kept_reasons.append(pending + own)
+        pending = []
+    if pending:
+        if kept_reasons:
+            kept_reasons[-1].extend(pending)
+        else:
+            kept_reasons.append(list(pending))
+        pending = []
     if not flat_starts or flat_starts[0] != 0:
         flat_starts.insert(0, 0)
         first = positions[0]
         doc = book.documents[first.doc]
         heading = doc.block(first.block)
         label = heading.text if heading and heading.is_heading else ""
-        keep.insert(0, _Candidate(pos=first, label=label, depth=0, source="implicit"))
+        keep.insert(0, _Candidate(pos=first, label=label, depth=0, source="implicit",
+                                  reason=None))
+        kept_reasons.insert(0, [])
 
     drafts: list[ChapterDraft] = []
     n = len(keep)
@@ -169,8 +282,9 @@ def _build_drafts(book: ParsedBook, candidates: list[_Candidate],
         drafts.append(ChapterDraft(
             idx=i, title=title, paragraphs=tuple(paragraphs), strategy=strategy,
             start_key=start_key, end_key=end_key_str,
+            rejected=tuple(kept_reasons[i]),
         ))
-    return [d for d in drafts if d.char_count > 0] or drafts
+    return _drop_empty(drafts)
 
 
 def _veto(drafts: list[ChapterDraft], policy: ChapteringPolicy) -> list[Rejection]:
@@ -221,7 +335,8 @@ def choose_strategy(book: ParsedBook, policy: ChapteringPolicy) -> tuple[str, li
         veto = _veto(drafts, policy)
         if not veto:
             for draft in drafts:
-                draft.rejected = tuple(
+                # Merge: keep the path C degradation records already on the draft.
+                draft.rejected = draft.rejected + tuple(
                     Rejection(r.strategy, r.reason, r.metrics) for r in rejections
                 )
             return strategy, drafts
@@ -233,5 +348,5 @@ def choose_strategy(book: ParsedBook, policy: ChapteringPolicy) -> tuple[str, li
     strategy, candidates = attempts[-1]
     drafts = _build_drafts(book, candidates, strategy)
     for draft in drafts:
-        draft.rejected = tuple(rejections)
+        draft.rejected = draft.rejected + tuple(rejections)
     return strategy, drafts

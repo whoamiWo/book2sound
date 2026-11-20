@@ -41,6 +41,24 @@ from soundbook.util.audio import flac_total_samples, pcm_to_flac
 from soundbook.util.disk import check_space
 
 
+ANCHOR_REASON_PREFIX = "anchor_"
+
+
+def anchor_warnings(draft: ChapterDraft) -> list[str]:
+    """Format ADR-015 path C records as human-readable chapter warnings."""
+
+    out: list[str] = []
+    for rej in draft.rejected:
+        if not rej.reason.startswith(ANCHOR_REASON_PREFIX):
+            continue
+        m = rej.metrics
+        text = f"{rej.reason}: {m.get('label', '')} ({m.get('href', '')}#{m.get('anchor', '')})"
+        if rej.reason == "anchor_unresolved":
+            text += ", cut at document start"
+        out.append(text)
+    return out
+
+
 @dataclass
 class ChapterPlan:
     draft: ChapterDraft
@@ -90,6 +108,7 @@ def prepare(
         warning = warnings_for_chapter(draft.char_count, len(draft.paragraphs), policies.clean)
         if warning:
             warnings.append(warning)
+        warnings.extend(anchor_warnings(draft))
         plans.append(ChapterPlan(draft=draft, cleaned=cleaned, segments=segments,
                                  warnings=warnings))
 

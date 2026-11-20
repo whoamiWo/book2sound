@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `epub2m4b inspect --json` | **0.16 s** | 含 zip 读取、epubx 解析、分章、清洗、分段 |
 
-同尺寸的 fake-TTS 全流程（60 章）在 e2e 中断测试里被反复执行，单次 `run` 在秒级；真实 Kokoro 端未实测（模型未下载）。
+同尺寸的 fake-TTS 全流程（60 章）在 e2e 中断测试里被反复执行，单次 `run` 在秒级；真实 Kokoro 端只有一次小样本观测，见下文“Spike 2：Kokoro 端到端”，不据此推算 RTF。
 
 ## 单段开销（fake 后端）
 
@@ -38,3 +38,22 @@
 5. 第五次 run：`up to date`。
 
 `tests/e2e/test_resume.py::test_hard_kill_then_resume`：40 章书，SIGKILL 中断后重跑，已完成的段不重复合成。
+
+## Spike 2：Kokoro 端到端
+
+日期：2026-11-20。宿主 Python 3.14 无法安装 `kokoro==0.9.4`（要求 `<3.13`），改用 `python:3.12-slim` 容器。
+
+| 项 | 观测值 |
+| --- | --- |
+| 镜像 | `epub2m4b-kokoro`，约 10.5 GB（torch 2.15.0、kokoro 0.9.4） |
+| 样本 | 2 章 × 4 段 |
+| 合成结果 | `synth: 6 new, 4 cached, 0 failed` |
+| 输出时长 | 70.1 s |
+| 章节起点 | 0 / 35.100 s |
+| 运行环境 | 纯 CPU，10 个短段约 10 分钟以上 |
+
+注意事项：
+
+- 样本只有 10 个短段，且包含模型首次加载，**只记录观测值，不推算 RTF**。
+- 构建时使用了华为 PyPI 镜像；Hugging Face 需 `HF_ENDPOINT=https://hf-mirror.com` 加 `HF_HUB_DISABLE_XET=1`，否则 Xet CDN 下载挂起。
+- 当时的 `docker build` / `docker run` 完整命令**未留存**。仓库中的 `Dockerfile.kokoro` 是按已知事实复原的配方，未声称与当时镜像逐字一致。
