@@ -134,11 +134,12 @@ def test_failed_segment_is_retried_on_next_run(home, monkeypatch):
     assert second.exit_code == 0, second.output
     assert out.is_file()
 
-    from soundbook.config import db_path
     from soundbook.db import connect
     from soundbook.util.hashing import sha256_file
 
-    db = connect(db_path())
+    # monkeypatch.undo() restored the real env, so name this test's home
+    # explicitly instead of asking config for the (now global) db path.
+    db = connect(home / "home" / "state.sqlite")
     book_id = sha256_file(book)
     failed = db.execute(
         "SELECT COUNT(*) AS n FROM segments WHERE book_id=? AND status='failed'",
