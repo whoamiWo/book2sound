@@ -8,6 +8,35 @@ All notable changes to this project are documented here. The format follows
 parsing, cleaning or segmentation semantics change, because it is part of the cache key
 (see ADR-007).
 
+## [0.1.2] - 2026-11-21
+
+Documentation, corpus tooling and sample validation only: no runtime chaptering or synthesis
+behaviour change. `PIPELINE_VERSION` stays at `0.1.0`.
+
+### Added
+
+- `tests/corpus/test_corpus.py` is now included in the repository (previously hidden by an
+  over-broad `corpus/` ignore rule), with optional `SOUNDBOOK_CORPUS` evaluation, pipeline-version
+  checks, inline comments, per-book F1 output and anchor-warning counts.
+- `tests/unit/test_corpus_gold.py` covers gold-file version matching, comments and legacy files.
+- `scripts/corpus_draft.py` writes reviewable `.boundaries` and `.headings.txt` drafts without
+  overwriting existing gold files; `docs/corpus.md` documents annotation rules and privacy.
+- `scripts/build_sample.py` builds a nine-chapter public-domain《阿Q正传》EPUB with navigation and
+  an original cover. `docs/compat.md` records its pinned source, SHA256, inspect result and the
+  player matrix. Kokoro produced a 9-chapter, 4963.240-second M4B (468 new, 1 cached, 0 failed),
+  with AAC 24 kHz mono audio and an embedded PNG cover verified by ffprobe; untested devices remain
+  explicitly untested.
+- `docs/benchmarks.md` adds the chapter-quality measurement section. No real corpus F1 is claimed
+  yet because no annotated real-book corpus was provided on 2026-11-21.
+
+### Changed
+
+- `.gitignore` ignores only the repository-root `/corpus/`, not `tests/corpus/`.
+- Corpus environment variable documentation uses `SOUNDBOOK_CORPUS`; the old 0.1.1 entry's
+  `SOUNDBOOK_CORPUS_DIR` spelling was incorrect and is corrected here without rewriting that
+  published historical entry.
+- Package version is `0.1.2`; `PIPELINE_VERSION` remains `0.1.0`.
+
 ## [0.1.1] - 2026-11-20
 
 Engineering hygiene only: no runtime behaviour change, no cache invalidation.
@@ -75,5 +104,6 @@ First release.
 - Multiple book sources inside one EPUB and complex CSS pagination are not specifically
   handled.
 
+[0.1.2]: https://github.com/whoamiWo/book2sound/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/whoamiWo/book2sound/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/whoamiWo/book2sound/releases/tag/v0.1.0

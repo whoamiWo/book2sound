@@ -2,7 +2,10 @@
 
 本项目（`epub2m4b`，import 包 `soundbook`）本身以 **Apache-2.0** 发布，见仓库根目录 `LICENSE`。
 **不分发任何 EPUB 文本、TTS 模型权重、语料或音频样本。** 测试用的 EPUB 全部由
-`tests/helpers.py` 在测试时现场生成，内容为本项目自写的占位文本。
+`tests/helpers.py` 在测试时现场生成，内容为本项目自写的占位文本。公开发布时可作为
+Release 附件提供独立生成的《阿Q正传》样书 M4B；该附件不进入 Git 仓库，且不随 pip 包分发。
+样书文本为公版（鲁迅 1936 年去世），语音由 Kokoro（Apache-2.0）生成；封面为本项目自绘，
+封面字由本机文泉驿字体绘制。样书正文来源和校验值见 `docs/compat.md`。
 
 ## 运行时依赖（随 `pip install epub2m4b` 安装）
 

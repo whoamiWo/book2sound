@@ -17,4 +17,4 @@ tests/fixtures/*.cover
 *.sqlite
 *.sqlite-*
 # local real-book corpus never enters the repo (legal rule)
-corpus/
+/corpus/

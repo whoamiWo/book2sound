@@ -1,5 +1,19 @@
 # 基准与容量
 
+## 分章质量
+
+本阶段先测量，不修分章。截至 2026-11-21，本机没有设置 `SOUNDBOOK_CORPUS`，也没有已人工复核的首批真实书金标，因此**没有可报告的真实语料 F1、策略命中统计或最差书目原因**；不得把公开样书或虚构结果计入首批样本。
+
+本地执行命令：
+
+```bash
+SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s
+```
+
+计划中的首批样本量为 10–20 本，`SOUNDBOOK_CORPUS_TOLERANCE` 默认 `1`，`SOUNDBOOK_CORPUS_MIN_F1` 默认 `0.90`。实际本数、各策略命中数、各类书 F1 和最差原因须在提供并人工复核金标后补测；版本不符的金标会跳过，不参与评分。首批覆盖目标包括完整 nav、卷级 nav、无 nav 网文、单文件多章和 fragment 锚点，但目前这些类别均未测量。
+
+另有一本公开可复现的《阿Q正传》样书用于结构/播放器 spike，不属于真实语料统计：`inspect` 实测 9 documents、9 toc entries、strategy `nav`、9 chapters、0 skippable、21,911 chars、469 estimated segments；Kokoro CPU 实测 `468 new, 1 cached, 0 failed`，输出 82.7 min / 9 chapters，详见 [`compat.md`](compat.md)。
+
 日期：2026-11-19，本机：Linux / Python 3.14.4 / ffmpeg 8.0.1。
 
 ## 合成测试书

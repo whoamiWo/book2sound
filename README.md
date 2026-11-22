@@ -86,11 +86,11 @@ python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install -e ".[dev]"
 pytest                    # unit + e2e (real ffmpeg, --tts fake)
 pytest -m e2e             # only end-to-end
-pytest -m corpus          # reserved for 0.2.0, needs SOUNDBOOK_CORPUS_DIR (selects nothing today)
+SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s  # optional local real-book evaluation
 ```
 
-Docs: [`docs/adr.md`](docs/adr.md) (decision records), [`docs/limitations.md`](docs/limitations.md), [`docs/benchmarks.md`](docs/benchmarks.md), [`docs/compare.md`](docs/compare.md), [`docs/licenses.md`](docs/licenses.md).
+Docs: [`docs/adr.md`](docs/adr.md) (decision records), [`docs/limitations.md`](docs/limitations.md), [`docs/benchmarks.md`](docs/benchmarks.md), [`docs/corpus.md`](docs/corpus.md) (local annotation), [`docs/compat.md`](docs/compat.md) (sample/player matrix), [`docs/compare.md`](docs/compare.md), [`docs/licenses.md`](docs/licenses.md).
 
 ## Legal
 
-Apache-2.0. No text, model weights or corpora are redistributed with this project. You are responsible for the legality of the EPUBs you convert.
+Apache-2.0. No text, model weights or corpora are redistributed with this project. You are responsible for the legality of the EPUBs you convert. The optional Release-only public-domain sample is documented in [`docs/compat.md`](docs/compat.md); it is not included in the repository or pip package.
