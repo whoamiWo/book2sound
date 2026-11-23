@@ -8,6 +8,34 @@ All notable changes to this project are documented here. The format follows
 parsing, cleaning or segmentation semantics change, because it is part of the cache key
 (see ADR-007).
 
+## [0.1.3] - 2026-11-22
+
+Quality measurement and documentation fixes only; `PIPELINE_VERSION` remains `0.1.0`.
+The five-book corpus workflow is now recorded as a local process-validation result;
+VLC desktop technical parsing and VLC Android manual playback are recorded. Apple Books and
+Smart AudioBook Player remain untested.
+
+### Fixed
+
+- Corpus F1 evaluation now skips stale or missing gold files per book, fails clearly on
+  an existing empty gold file, and skips cleanly when nothing is scoreable.
+- Corpus measurement now matches production by classifying and excluding skippable
+  chapters, prints per-book and aggregate summaries, and enables the F1 gate only when
+  `SOUNDBOOK_CORPUS_MIN_F1` is explicitly set.
+- `corpus_draft.py` marks skippable draft chapters for annotators.
+
+### Measured
+
+- On a 12th Gen Intel i7-12700H (10 cores / 20 threads), a 74-segment two-chapter
+  Kokoro sample measured RTF 0.384 with `--jobs 1` and 0.563 with `--jobs 2`.
+  The CPU guidance now recommends starting with `--jobs 1`; see `docs/benchmarks.md`.
+- The sample source repository has no declared license; this is recorded in
+  `docs/compat.md` alongside its public-domain attribution.
+- Five local books measured as a process-validation corpus: mean F1 `0.947`, worst F1
+  `0.909`, with an explicit `0.90` gate passing; no external quality claim is made.
+- VLC Android manual test: chapter titles, chapter seeking, cover and total duration passed;
+  the displayed `1:22:43` matches the measured `4963.240 s`.
+
 ## [0.1.2] - 2026-11-21
 
 Documentation, corpus tooling and sample validation only: no runtime chaptering or synthesis
@@ -104,6 +132,7 @@ First release.
 - Multiple book sources inside one EPUB and complex CSS pagination are not specifically
   handled.
 
+[0.1.3]: https://github.com/whoamiWo/book2sound/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/whoamiWo/book2sound/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/whoamiWo/book2sound/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/whoamiWo/book2sound/releases/tag/v0.1.0

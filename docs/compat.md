@@ -5,6 +5,7 @@
 - 样书：鲁迅《阿Q正传》，九章，EPUB 3，每章一个 XHTML 文档和 `<h1>`，含导航和自绘封面。
 - 正文为公版作品（鲁迅 1936 年去世）。生成脚本：`scripts/build_sample.py`。
 - 文本来源（固定 commit）：<https://raw.githubusercontent.com/baooab/The-true-story-of-Ah-Q/1402397efe0e18f3d6dbaaecd628c76647aa1ba3/content.md>，取文日期 2026-11-21。该 Markdown 的 SHA256 为 `e6a6d42367cd1b741790b6a130e68ac3f5e5aa0a615c6593377fcdf3869032e5`（64,731 bytes）。
+- 来源许可：2026-11-22 复核时，该 GitHub 仓库页面未声明许可证，`/license` API 返回 404；正文为公版作品，署名信息保留作者鲁迅与上述来源。后续可换成能稳定访问且有明确许可说明的 Wikisource 文本。
 - Wikisource 原计划 URL <https://zh.wikisource.org/wiki/阿Q正傳> 在本次执行时多次请求超时，未能核实；因此没有把 Wikisource 作为本次来源，也未声称与其校对。
 - 生成命令：
   ```bash
@@ -19,7 +20,7 @@
 ## 分章与合成检查
 
 - `epub2m4b inspect`：9 documents、9 toc entries、strategy=`nav`、9 chapters、0 skippable、21,911 chars、469 estimated segments，封面可识别。
-- 合成：`epub2m4b-kokoro` 镜像（0.1.1 runtime，Kokoro 0.9.4 / torch 2.15.0+cu132），voice `zf_xiaobei`，CPU，命令为 `run /data/aq-zhengzhuan.epub --tts kokoro --voice zf_xiaobei -o /data/aq-zhengzhuan.m4b`。实际 `synth: 468 new, 1 cached, 0 failed`，最终 `wrote ... (82.7 min, 9 chapters)`；整段运行约 38 分钟（含首次模型加载），不据此推算 RTF。
+- 合成：`epub2m4b-kokoro` 镜像（0.1.1 runtime，Kokoro 0.9.4 / torch 2.15.0+cu132），voice `zf_xiaobei`，CPU，命令为 `run /data/aq-zhengzhuan.epub --tts kokoro --voice zf_xiaobei -o /data/aq-zhengzhuan.m4b`。实际 `synth: 468 new, 1 cached, 0 failed`，最终 `wrote ... (82.7 min, 9 chapters)`；旧的一次性整本运行约 38 分钟（含首次模型加载），仅作端到端记录，吞吐比较以 [`benchmarks.md`](benchmarks.md) 的同机 jobs A/B 为准。`inspect` 的 469 段是段总数，合成时其中 1 段命中已有缓存，所以 468 + 1 = 469，两处数字一致。
 - `ffprobe` 实测：总时长 **4963.240 s**（82 分 43.240 秒），文件 **36,989,015 bytes**，9 个章节；音频 AAC 24 kHz 单声道，另有 PNG 封面流（1200×1600）。章节起点（秒）与标题：
 
   | 起点 | 标题 |
@@ -43,8 +44,8 @@
 
 | 播放器 / 环境 | 版本与设备 | 章节标题 | 跳转 | 封面 | 总时长 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- |
-| VLC（桌面） | 本机未安装 VLC | 未测 | 未测 | 未测 | 未测 | 不能推断通过；ffprobe 已核实 9 章节、封面流和 4963.240 s |
-| VLC（Android / iOS） | 无设备 | 未测 | 未测 | 未测 | 未测 | 不能推断通过 |
+| VLC（桌面） | VLC 3.0.23 / Ubuntu 26.04 amd64 | 未测（技术解析通过） | 未测（RC seek 到约 0 / 374 s） | 未测（技术识别 PNG） | 未测（技术读取 4963.240 s） | VLC 已实际打开 M4B，识别中文元数据、AAC 音频、9 章轨道和嵌入 PNG；无界面自动化不能替代人工显示/听测 |
+| VLC（Android） | 版本与设备未提供 | 通过 | 通过 | 通过 | 通过（1:22:43） | 用户实测：章节列表、章节跳转、封面和总时长均正常；1:22:43 与 ffprobe 的 4963.240 s 一致 |
 | Apple Books | 无设备 | 未测 | 未测 | 未测 | 未测 | 不能推断通过 |
 | Smart AudioBook Player（Android） | 无设备 | 未测 | 未测 | 未测 | 未测 | 不能推断通过 |
 

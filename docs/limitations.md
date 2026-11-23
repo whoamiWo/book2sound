@@ -20,6 +20,11 @@
 - CJK 之外的语言未做专门处理：`segment` 依赖中文句末标点，英文文本仍能分段，但打包粒度会偏大。
 - 分章否决器（`dominant_chapter` / `oversized_chapter` / `tiny_median_chapter`）会沿 nav → outline → spine 逐级降级，并把拒绝原因写进 `chapters.rejected`（`inspect --json` 可见）。
 - 前/后辅文（目录、序言、版权、后记…）默认**不合成**；`--include-front-matter` 打开。stub 阈值 300 字符，见 `ingest/classify.py`。
+- 分段以段落为边界：短段不会与下一段合并，因此对话体、诗歌或大量单句成段的书会产生很多明显短于
+  `target_chars`（默认 90 字）的段。样书实测 21,911 字 → 469 段，约 47 字/段。每个非标题分段是一次
+  TTS 调用；HTTP 后端按分段发请求，30 万字书约 6k 次请求，需要端点承受这个请求量，停顿听感也会更碎。
+  目前没有公开的 `--target-chars` CLI 选项；手工调整时修改 `SegmentPolicy.target_chars`（不要超过
+  `hard_max_chars=300`），并注意这会改变分段与缓存键。
 
 ## 合成侧
 

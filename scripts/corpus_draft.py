@@ -9,6 +9,7 @@ from pathlib import Path
 from soundbook import PIPELINE_VERSION
 from soundbook.config import ChapteringPolicy
 from soundbook.ingest.chaptering import choose_strategy
+from soundbook.ingest.classify import classify_skippable
 from soundbook.ingest.loader import load_book
 
 
@@ -23,10 +24,16 @@ def main() -> None:
         parser.error(f"{gold} already exists; use --force to replace it")
 
     book = load_book(epub)
-    strategy, drafts = choose_strategy(book, ChapteringPolicy())
+    policy = ChapteringPolicy()
+    strategy, drafts = choose_strategy(book, policy)
+    classify_skippable(drafts, policy)
     gold.write_text(
         f"# pipeline {PIPELINE_VERSION}\n"
-        + "".join(f"{draft.start_key} # {draft.title}\n" for draft in drafts),
+        + "".join(
+            f"{draft.start_key} # {draft.title}"
+            f"{' [skippable]' if draft.skippable else ''}\n"
+            for draft in drafts
+        ),
         encoding="utf-8",
     )
     headings = epub.with_suffix(".headings.txt")
@@ -38,7 +45,8 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    print(f"{epub.name}: strategy={strategy} chapters={len(drafts)}")
+    skippable = sum(draft.skippable for draft in drafts)
+    print(f"{epub.name}: strategy={strategy} chapters={len(drafts)} skippable={skippable}")
     print(f"wrote {gold}")
     print(f"wrote {headings}")
 

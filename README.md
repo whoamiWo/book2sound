@@ -33,6 +33,8 @@ epub2m4b status book.epub            # one book, including failed segments
 
 Options on `run`: `--voice`, `--rate`, `--jobs`, `--max-retries`, `--endpoint` (for `openai_compat`), `--bitrate`, `--no-loudnorm`, `--no-speak-titles`, `--include-front-matter`, `--allow-incomplete`.
 
+For CPU Kokoro runs, start with `--jobs 1`: on the tested 10-core/20-thread machine it was faster than `--jobs 2` because multi-job mode limits each worker to one torch thread. Re-measure on other hardware; see [benchmarks](docs/benchmarks.md).
+
 Exit codes: **0** success · **1** general error · **2** failed/incomplete segments · **3** unusable input · **4** TTS unavailable · **5** insufficient disk · **130** interrupted.
 
 ## State

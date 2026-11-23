@@ -2,19 +2,30 @@
 
 ## 分章质量
 
-本阶段先测量，不修分章。截至 2026-11-21，本机没有设置 `SOUNDBOOK_CORPUS`，也没有已人工复核的首批真实书金标，因此**没有可报告的真实语料 F1、策略命中统计或最差书目原因**；不得把公开样书或虚构结果计入首批样本。
+本阶段先测量，不修分章。2026-11-22 已完成首批 5 本本地 EPUB 的草稿 → 人工核对 → F1 闭环；另有 1 本重复/异常副本（无标题、仅 2 个文档、最终合并为单章）未计入样本。5 本结果均通过显式 `SOUNDBOOK_CORPUS_MIN_F1=0.90` 闸门：均值 F1 `0.947`，最差 F1 `0.909`。结果只代表流程验证，不足以支撑对外质量承诺。
 
 本地执行命令：
 
 ```bash
 SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s
+SOUNDBOOK_CORPUS=corpus SOUNDBOOK_CORPUS_MIN_F1=0.90 pytest -m corpus -s
 ```
 
-计划中的首批样本量为 10–20 本，`SOUNDBOOK_CORPUS_TOLERANCE` 默认 `1`，`SOUNDBOOK_CORPUS_MIN_F1` 默认 `0.90`。实际本数、各策略命中数、各类书 F1 和最差原因须在提供并人工复核金标后补测；版本不符的金标会跳过，不参与评分。首批覆盖目标包括完整 nav、卷级 nav、无 nav 网文、单文件多章和 fragment 锚点，但目前这些类别均未测量。
+`SOUNDBOOK_CORPUS_TOLERANCE` 默认 `1`；`SOUNDBOOK_CORPUS_MIN_F1` 只在显式设置时启用最差一本门槛，未设时只打印。F1 只统计生产路径会合成的非 skippable 章节，输出同时给出 skippable 章数，便于识别辅文误判。版本不符的金标逐本跳过，不参与评分。首批实际覆盖完整 nav、卷级 nav、分层 nav 和 spine fallback；无 nav 网文、单文件多章和 fragment 锚点尚未覆盖。
 
-另有一本公开可复现的《阿Q正传》样书用于结构/播放器 spike，不属于真实语料统计：`inspect` 实测 9 documents、9 toc entries、strategy `nav`、9 chapters、0 skippable、21,911 chars、469 estimated segments；Kokoro CPU 实测 `468 new, 1 cached, 0 failed`，输出 82.7 min / 9 chapters，详见 [`compat.md`](compat.md)。
+| EPUB SHA256 前 8 位 | 结构/策略 | F1 | 预测非 skippable | 金标 | skippable | 章节数一致 | anchor 警告 |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |
+| `d615f98c` | 分层 nav / nav | 1.000 | 165 | 165 | 3 | 是 | 0 |
+| `dffe65b0` | 卷级 nav / nav | 0.909 | 12 | 10 | 1 | 否 | 0 |
+| `c4827125` | 完整 nav / nav | 0.933 | 24 | 21 | 3 | 否 | 0 |
+| `ecf98908` | 分层 nav / nav | 0.971 | 36 | 34 | 4 | 否 | 0 |
+| `3b10558e` | nav veto / spine | 0.919 | 20 | 17 | 3 | 否 | 0 |
 
-日期：2026-11-19，本机：Linux / Python 3.14.4 / ffmpeg 8.0.1。
+`chapters_match=否` 的 4 本主要涉及版权页、目录页、序文/辅文是否作为阅读章节的标注口径差异；本阶段没有据此修改分章逻辑。另有一本重复/异常副本没有可用标题证据，保留在 `corpus/` 但没有 `.boundaries` 金标。
+
+另有一本公开可复现的《阿Q正传》样书用于结构/播放器 spike，不属于真实语料统计：`inspect` 实测 9 documents、9 toc entries、strategy `nav`、9 chapters、0 skippable、21,911 chars、469 estimated segments；Kokoro CPU 实测 `468 new, 1 cached, 0 failed`，输出 82.7 min / 9 chapters，VLC 3.0.23 技术解析识别 AAC、中文元数据、9 章和 PNG 封面，但人工显示/听测仍未完成，详见 [`compat.md`](compat.md)。其中 469 是段总数，1 段命中缓存，所以 468 + 1 = 469。
+
+日期：2026-11-22，本机：Linux / Python 3.14.4 / ffmpeg 8.0.1；CPU：12th Gen Intel(R) Core(TM) i7-12700H，10 物理核 / 20 逻辑 CPU。
 
 ## 合成测试书
 
@@ -24,7 +35,7 @@ SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s
 | --- | --- | --- |
 | `epub2m4b inspect --json` | **0.16 s** | 含 zip 读取、epubx 解析、分章、清洗、分段 |
 
-同尺寸的 fake-TTS 全流程（60 章）在 e2e 中断测试里被反复执行，单次 `run` 在秒级；真实 Kokoro 端只有一次小样本观测，见下文“Spike 2：Kokoro 端到端”，不据此推算 RTF。
+同尺寸的 fake-TTS 全流程（60 章）在 e2e 中断测试里被反复执行，单次 `run` 在秒级；真实 Kokoro 的吞吐以本文的 jobs A/B 实测为准。
 
 ## 单段开销（fake 后端）
 
@@ -53,6 +64,42 @@ SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s
 
 `tests/e2e/test_resume.py::test_hard_kill_then_resume`：40 章书，SIGKILL 中断后重跑，已完成的段不重复合成。
 
+## Kokoro 吞吐 A/B（jobs 1 vs 2）
+
+日期：2026-11-22。两组使用同一台机器、同一 `epub2m4b-kokoro` 镜像、同一 voice、同一
+2 章子集（3,962 字、74 段），各自 `docker run --rm` 新容器，并使用独立的
+`SOUNDBOOK_HOME` 与 `SOUNDBOOK_CACHE_DIR`。两组均为 74 段新合成、0 cached、0 failed；
+Hugging Face 权重已在本机缓存并以只读方式挂载，因此不含模型下载，但包含进程内首次加载。
+音频由 `ffprobe` 核实为 864.595 s（14.4099 min），RTF 定义为墙钟秒数 / 音频秒数。
+
+机器信息：Linux，Python 3.12 容器，12th Gen Intel(R) Core(TM) i7-12700H，10 物理核 / 20
+逻辑 CPU，ffmpeg 由镜像提供。实际命令（`$PWD` 为仓库根）：
+
+```bash
+for jobs in 1 2; do
+  /usr/bin/time -p docker run --rm --user "$(id -u):$(id -g)" \\
+    -v "$PWD/.scratch/ab-path-c:/data" \\
+    -v "$PWD/.scratch/spike2/hf:/data/hf:ro" \\
+    -e HF_HOME=/data/hf -e HF_ENDPOINT=https://hf-mirror.com \\
+    -e HF_HUB_DISABLE_XET=1 -e SOUNDBOOK_HOME=/tmp/state-j$jobs \\
+    -e SOUNDBOOK_CACHE_DIR=/tmp/cache-j$jobs epub2m4b-kokoro \\
+    run /data/aq-first-two.epub --tts kokoro --voice zf_xiaobei --jobs "$jobs" \\
+    -o /data/ab-j$jobs.m4b
+done
+ffprobe -v error -show_entries format=duration .scratch/ab-path-c/ab-j1.m4b
+```
+
+| `--jobs` | 墙钟 | 音频时长 | RTF | 合成结果 |
+| ---: | ---: | ---: | ---: | --- |
+| 1 | 331.89 s | 864.595 s | **0.384** | 74 new / 0 cached / 0 failed |
+| 2 | 486.36 s | 864.595 s | **0.563** | 74 new / 0 cached / 0 failed |
+
+在这台 CPU 机器上，`--jobs 2` 反而比 `--jobs 1` 慢 46.5%。原因是
+`src/soundbook/tts/kokoro_local.py` 在 jobs 大于 1 时对每个 worker 调用
+`torch.set_num_threads(1)`；jobs 2 实际只让两个 worker 各用一个 torch 线程，而 jobs 1
+允许单个 worker 使用 torch 的线程池。因此 CPU 本地运行默认建议 `--jobs 1`；不同 CPU、容器
+配额或模型版本应重新测量。该结果是 2 章流程验证，不外推为所有书的保证。
+
 ## Spike 2：Kokoro 端到端
 
 日期：2026-11-20。宿主 Python 3.14 无法安装 `kokoro==0.9.4`（要求 `<3.13`），改用 `python:3.12-slim` 容器。
@@ -64,7 +111,7 @@ SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s
 | 合成结果 | `synth: 6 new, 4 cached, 0 failed` |
 | 输出时长 | 70.1 s |
 | 章节起点 | 0 / 35.100 s |
-| 运行环境 | 纯 CPU，10 个短段约 10 分钟以上 |
+| 运行环境 | 纯 CPU；该次集成验证包含首次模型加载/环境准备，不作为吞吐基准 |
 
 注意事项：
 
