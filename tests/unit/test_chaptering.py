@@ -88,6 +88,39 @@ def test_front_matter_flagged(tmp_path):
     assert not any(d.skippable for d in drafts[2:])
 
 
+def test_non_reading_pages_skipped_outside_front_window(tmp_path):
+    # Regression: 目录/版权页 often sit just past idx 2; the old position gate
+    # let them be synthesized even though docs/corpus.md says they do not count.
+    body = CHINESE_PARAGRAPHS * 3
+    titles = [f"第{i + 1}章" for i in range(12)]
+    titles[3] = "目录"
+    titles[4] = "版权页"
+    titles[5] = "前言 作者的话"
+    chapters = [Chapter(title, body) for title in titles]
+    make_epub(tmp_path / "late-fm.epub", chapters)
+    book = load_book(tmp_path / "late-fm.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    classify_skippable(drafts, ChapteringPolicy())
+    assert drafts[3].skippable is True    # 目录 at idx 3
+    assert drafts[4].skippable is True    # 版权页 at idx 4
+    assert drafts[5].skippable is False   # 前言 is content, not a non-reading page
+    assert not any(d.skippable for d in drafts[6:])
+
+
+def test_non_reading_page_matched_from_first_paragraph(tmp_path):
+    # Spine fallback uses the file name as the title; the structural marker is
+    # only in the text ("版权页"), so the classifier must inspect it too.
+    body = CHINESE_PARAGRAPHS * 3
+    chapters = [Chapter(f"第{i + 1}章", body) for i in range(12)]
+    chapters[3] = Chapter("", ["版权页", *body])
+    make_epub(tmp_path / "spine-cr.epub", chapters, nav_entries=[])
+    book = load_book(tmp_path / "spine-cr.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    assert drafts[3].title == "ch4.xhtml"  # no heading text, falls back to href
+    classify_skippable(drafts, ChapteringPolicy())
+    assert drafts[3].skippable is True
+
+
 def _path_c_drafts(tmp_path, nav_entries, *, headings=()):
     chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
     chapters[1].headings = list(headings)

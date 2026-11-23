@@ -4,9 +4,43 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-`PIPELINE_VERSION` is tracked separately from the package version: it only changes when
-parsing, cleaning or segmentation semantics change, because it is part of the cache key
+`PIPELINE_VERSION` is tracked separately from the package version: it changes when parsing,
+cleaning, chapter-selection or segmentation semantics change, because it is part of the cache key
 (see ADR-007).
+
+## [0.2.0] - 2026-11-23
+
+Chapter-selection semantics changed, so `PIPELINE_VERSION` moves to `0.2.0` together with the
+package version. Parsing, cleaning and segmentation are untouched, and block indices are
+unchanged.
+
+### Fixed
+
+- `classify_skippable` now treats non-reading pages (目录、版权页、书名页、扉页、contents,
+  copyright, colophon, 书目, …) as skippable wherever they appear. The previous implementation
+  also required them to fall in the first two or last one chapter, so a 目录/版权页 at chapter
+  index 3+ was synthesized as body text, contradicting `docs/corpus.md`.
+- The classifier matches non-reading-page keywords against the chapter title plus its first
+  paragraph, so spine-fallback chapters whose title is a bare file name (e.g. `part0001.html`)
+  are still recognised from their text. Reading-content keywords remain title- and window-gated.
+- 前言/序/引言/楔子 stay window-gated because they are reading chapters; they are not skipped
+  just for their title.
+
+### Measured
+
+- The same five-book local corpus now measures mean F1 `1.000`, worst `1.000`, all five with
+  `chapters_match=是`. Per-chapter comparison showed the previous four mismatches were entirely
+  skippable under-detection, not split/merge errors; no missed or spurious cuts were found.
+- Structure coverage now includes fragment anchors and single-file multi-chapter books:
+  `d615f98c` resolves 158 fragment nav entries into 168 chapters across 16 documents;
+  `ecf98908` resolves 37 fragment entries with 8 documents contributing multiple chapters.
+  Six of the seven target structures are covered; a genuine no-nav web novel is still missing.
+- Gold files were regenerated and re-checked; only the 百年孤独 editorial introduction changed
+  (from skippable to body), aligning it with the “序 counts as a chapter” rule. All other
+  boundary lines were unchanged. Gold headers now record pipeline `0.2.0`.
+- The duplicate/abnormal copy in the corpus directory (two documents, placeholder nav, one
+  merged chapter) remains unlabelled and excluded from statistics.
+- Player matrix is unchanged: Apple Books and Smart AudioBook Player still have no device test.
 
 ## [0.1.3] - 2026-11-22
 

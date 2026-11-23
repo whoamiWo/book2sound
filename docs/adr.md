@@ -151,3 +151,12 @@ v5 计划 §3.9 把 spike 3 降级为安装检查：`soundfile` 不可用则段�
 - **供应链**：`actions/*` 与 `pypa/gh-action-pypi-publish` 均固定到具体 commit SHA，不用浮动 tag。
 - **前置（网页配置）**：PyPI 与 TestPyPI 的 `epub2m4b` 项目各添加一个 Trusted Publisher（owner `whoamiWo`、repo `book2sound`、workflow `release.yml`、environment 分别为 `pypi` / `testpypi`），GitHub 仓库创建同名 environment。配置生效后撤销账号级 token 与 TestPyPI token。
 - **失败处理**：tag 先于上传创建；若 `build` 或 `testpypi` 失败，修复后发下一个补丁版本，不移动已推送的 tag。若仅 `pypi` job 失败（`testpypi` 已成功），在 GitHub 上只 Re-run failed jobs——整条重跑会因 TestPyPI 拒绝重复文件名而失败。
+
+## ADR-022 辅文判定：非阅读页按关键词全篇跳过，阅读章节仍限首末窗口
+
+2026-11-23。5 本语料的 `chapters_match=否` 全部不是漏切/误切：逐章并列后，预测边界与金标 100% 对齐，差异只在 `classify_skippable` 的辅文判定。`docs/corpus.md` 标注规则明确「版权页、目录页不算」，但旧实现把关键词命中也限制在前 2 章 / 后 1 章窗口内，落在窗口之外的书名页、版权页、目录页（如第 3、4 章）会被当作正文合成。
+
+- **两类关键词分开**：`NON_READING_KEYWORDS`（目录、扉页、版权、书名页、cover、title page、contents、copyright、colophon、书目）全篇命中即跳过，不再受窗口限制；`FRONT_KEYWORDS` / `BACK_KEYWORDS`（前言、序、引言、楔子、后记、附录、致谢、参考文献、番外等）保持标题命中 + 窗口规则；短章仍按既有首末窗口桩长度规则处理。
+- **匹配文本**：非阅读页关键词检查「标题 + 第一段」，因为 spine fallback 下章节标题可能退化为文件名（如 `part0001.html`），而「版权页」「目录」只出现在正文第一段；前言/后记等阅读内容关键词仍只检查标题并受首末窗口限制，避免正文首段偶然提到这些词时误跳过。
+- **语料复核**：同一 5 本（结构不变，块索引不变）重测 F1 全部 1.000，之前 4 本 `chapters_match=否` 全部消除；百年孤独的编辑导言此前被人工标为 skippable，与规则 1「序算章节」冲突，金标已统一为正文。
+- **版本**：这是分章输出语义变化，`PIPELINE_VERSION` 升 `0.2.0`（包版本同步 0.2.0）；块索引未变，旧金标经重生成核对后更新版本头继续可用。除百年孤独编辑导言的一处 skippable 标记更正外，其余边界行保持一致。
