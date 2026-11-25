@@ -121,6 +121,74 @@ def test_non_reading_page_matched_from_first_paragraph(tmp_path):
     assert drafts[3].skippable is True
 
 
+def test_short_book_non_reading_marker_is_skipped(tmp_path):
+    # Two chapters stay below min_nav_entries=3, so chaptering falls back to
+    # spine and the empty <h1> leaves the file name as the title.
+    body = CHINESE_PARAGRAPHS * 3
+    chapters = [Chapter("", ["目录", *body]), Chapter("", body)]
+    make_epub(tmp_path / "short-toc.epub", chapters, nav_entries=[])
+    book = load_book(tmp_path / "short-toc.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    assert len(drafts) == 2
+    assert drafts[0].title == "ch1.xhtml"
+    classify_skippable(drafts, ChapteringPolicy())
+    assert drafts[0].skippable is True
+    assert drafts[1].skippable is False
+
+
+def test_short_book_does_not_skip_on_stub_rule(tmp_path):
+    # The n <= 2 guard exists so a short book is not swallowed by STUB_CHARS;
+    # dropping it wholesale must not regress into "every chapter is a stub".
+    chapters = [Chapter("第1章", ["测" * 100]), Chapter("第2章", ["试" * 100])]
+    make_epub(tmp_path / "short-body.epub", chapters)
+    book = load_book(tmp_path / "short-body.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    classify_skippable(drafts, ChapteringPolicy())
+    assert [d.skippable for d in drafts] == [False, False]
+
+
+def test_body_paragraph_mentioning_keywords_is_not_skipped(tmp_path):
+    # "他翻开目录，检查版权归属和书名页的写法。" merely mentions the markers;
+    # only a first paragraph that *starts* with one is a non-reading page.
+    body = CHINESE_PARAGRAPHS * 3
+    chapters = [Chapter(f"第{i + 1}章", body) for i in range(12)]
+    chapters[2] = Chapter("第三章", ["他翻开目录，检查版权归属和书名页的写法。", *body])
+    make_epub(tmp_path / "mention.epub", chapters)
+    book = load_book(tmp_path / "mention.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    classify_skippable(drafts, ChapteringPolicy())
+    assert drafts[2].skippable is False
+
+
+def test_bibliography_is_readable_in_the_middle(tmp_path):
+    # 书目 is appendix-like content the user may want spoken; only the back
+    # window rule may skip it, so a mid-book 书目 reads as body.
+    body = CHINESE_PARAGRAPHS * 3
+    chapters = [Chapter(f"第{i + 1}章", body) for i in range(12)]
+    chapters[5] = Chapter("书目", body)
+    chapters[11] = Chapter("参考文献", body)
+    make_epub(tmp_path / "biblio.epub", chapters)
+    book = load_book(tmp_path / "biblio.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    classify_skippable(drafts, ChapteringPolicy())
+    assert drafts[5].skippable is False
+    assert drafts[11].skippable is True
+
+
+def test_all_skippable_book_keeps_audio(tmp_path):
+    # Both chapters are non-reading pages; clearing every flag is better than
+    # exiting with "nothing was synthesized; there is no audio to package".
+    body = CHINESE_PARAGRAPHS * 3
+    chapters = [Chapter("", ["版权页", *body]), Chapter("", ["版权页", *body])]
+    make_epub(tmp_path / "all-front.epub", chapters, nav_entries=[])
+    book = load_book(tmp_path / "all-front.epub")
+    _, drafts = choose_strategy(book, ChapteringPolicy())
+    classify_skippable(drafts, ChapteringPolicy())
+    assert len(drafts) == 2
+    assert not all(d.skippable for d in drafts)
+    assert any(not d.skippable for d in drafts)
+
+
 def _path_c_drafts(tmp_path, nav_entries, *, headings=()):
     chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
     chapters[1].headings = list(headings)

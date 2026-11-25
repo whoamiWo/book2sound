@@ -8,6 +8,45 @@ All notable changes to this project are documented here. The format follows
 cleaning, chapter-selection or segmentation semantics change, because it is part of the cache key
 (see ADR-007).
 
+## [0.3.0] - 2026-11-25
+
+Chapter-selection semantics changed, so `PIPELINE_VERSION` moves to `0.3.0` together with the
+package version. Parsing, cleaning and segmentation are untouched, and block indices are
+unchanged.
+
+### Fixed
+
+- `classify_skippable` no longer returns early for books with one or two chapters. Non-reading
+  pages (目录、版权页、扉页、书名页、contents, copyright, colophon, …) are now skipped in short
+  books too; the `STUB_CHARS` and front/back-window rules still only apply when there are more
+  than two chapters, so a short book cannot be swallowed by the stub threshold.
+- A non-reading marker in the first paragraph must now be a **prefix** (after dropping
+  whitespace), not an unrestricted substring. A body sentence such as
+  “他翻开目录，检查版权归属和书名页的写法。” no longer skips its chapter, while standalone
+  “目录”, “版权所有 © …” and “Table Of Contents” still match. Titles keep substring matching
+  because they are metadata.
+- If every chapter would be skippable, the flags are cleared so `run` still has audio to
+  synthesize instead of exiting 2 with “nothing was synthesized; there is no audio to package”.
+
+### Changed
+
+- `书目` moved from `NON_READING_KEYWORDS` to `BACK_KEYWORDS`: a mid-book bibliography is
+  spoken as an appendix, and only the back-window rule (last chapter by default) may skip it.
+  `参考文献` keeps the same window rule.
+
+### Measured
+
+- The same five local corpus books re-tested under pipeline `0.3.0`: mean F1 `1.000`, worst
+  `1.000`, all five `chapters_match=是`. `3b10558e` (spine fallback) now synthesizes the
+  “已出书目” section (previously marked skippable), so its gold dropped that `[skippable]`
+  marker; skippable count changed 6 → 5. All other boundaries and counts are unchanged.
+- A synthetic no-nav sample (`8f96c9c1`, built by `scripts/build_nonav_sample.py`, 120
+  chapters as plain-text title paragraphs, no navigation document) covers the last missing
+  chaptering code path: strategy reports `nav` because epubx synthesizes 123 spine-derived toc
+  entries, headings are empty, and titles degrade to file names; F1 `1.000` against authored
+  gold. A genuine no-nav web novel is still missing from the real corpus; the untested Apple
+  Books / Smart AudioBook Player entries are unchanged from 0.2.0.
+
 ## [0.2.0] - 2026-11-23
 
 Chapter-selection semantics changed, so `PIPELINE_VERSION` moves to `0.2.0` together with the

@@ -33,7 +33,7 @@ F1 只统计生产中会合成的非 skippable 章节；预测集先调用与 `r
 
 脚本在 EPUB 旁生成两个文件；已有金标时默认拒绝覆盖，确认需要重做时才加 `--force`：
 
-- `<stem>.boundaries`：预测边界草稿。首行 `# pipeline 0.2.0` 记录块索引所对应的
+- `<stem>.boundaries`：预测边界草稿。首行 `# pipeline 0.3.0` 记录块索引所对应的
   `PIPELINE_VERSION`，其后每行 `<zip-relative-href>|<block-index> # 预测章节标题`。
   与生产路径一致的 skippable 章节会在标题后标 `[skippable]`（例如
   `OEBPS/Text/ch1.xhtml|0 # 目录 [skippable]`），表示该行不会被计入 F1，不要把它当成漏切。
@@ -56,10 +56,11 @@ F1 只统计生产中会合成的非 skippable 章节；预测集先调用与 `r
 
 ## 首批覆盖目标与记录
 
-本阶段已用 **5 本**去重后的人工复核书跑通闭环（草稿 → 核对 → 测量）；验证工具与流程后再扩到
+本阶段已用 **5 本**去重后的人工复核真实书跑通闭环（草稿 → 核对 → 测量）；验证工具与流程后再扩到
 10–20 本。7 类目标结构已覆盖 6 类：完整 nav、卷级 nav、分层 nav、spine fallback、单文件多章、
-fragment 锚点；真实“无 nav 网文”仍缺合格样本。类别汇总只报告 SHA256 前 8 位、结构和分数，
-不报告私有书名。
+fragment 锚点；第 7 类「无 nav」由 `scripts/build_nonav_sample.py` 生成的合成样本补齐代码路径
+（`8f96c9c1`，epubx 用 spine 合成 toc，章节标题为文件名），但**真实的无 nav 网文仍缺合格样本**。
+类别汇总只报告 SHA256 前 8 位、结构和分数，不报告私有书名。
 
 记录每本时增加 `skippable` 章数，并核对「预测的非 skippable 章数 + skippable 章数」与
 猜测的原始章节总数、以及金标章节数是否一致；这样「多切/少切/错位」可以分开判断。
@@ -71,7 +72,8 @@ F1、策略、anchor 警告数之外，结果表如下：
 | `dffe65b0` | 卷级 nav | — | 1.000 | nav | 0 | 3 | 是 | 已核对 |
 | `c4827125` | 完整 nav | — | 1.000 | nav | 0 | 5 | 是 | 已核对 |
 | `ecf98908` | fragment 锚点 + 分层 nav | — | 1.000 | nav | 0 | 6 | 是 | 已核对 |
-| `3b10558e` | nav veto / spine fallback（含 fragment 锚点） | — | 1.000 | spine | 0 | 6 | 是 | 已核对 |
+| `3b10558e` | nav veto / spine fallback（含 fragment 锚点） | — | 1.000 | spine | 0 | 5 | 是 | 已核对 |
+| `8f96c9c1` | 无 nav 合成样本（123 文档，章节标题为纯文本段落） | — | 1.000 | nav（epubx 合成 toc） | 0 | 3 | 是 | 已核对 |
 | 异常副本（未计入） | 无标题证据、2 文档、占位 nav | — | — | spine | — | 0 | — | 未纳入 |
 
 `d615f98c` 有 16 个 spine 文档、168 章，158 个 fragment 锚点全部精确解析；`ecf98908` 的
