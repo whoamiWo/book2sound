@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from helpers import CHINESE_PARAGRAPHS
 
 from soundbook.config import CleanPolicy
 from soundbook.ingest.clean import (
@@ -10,7 +11,6 @@ from soundbook.ingest.clean import (
     repeated_headers,
     warnings_for_chapter,
 )
-from helpers import CHINESE_PARAGRAPHS
 
 POLICY = CleanPolicy()
 

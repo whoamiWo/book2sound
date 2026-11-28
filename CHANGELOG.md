@@ -8,6 +8,54 @@ All notable changes to this project are documented here. The format follows
 cleaning, chapter-selection or segmentation semantics change, because it is part of the cache key
 (see ADR-007).
 
+## [0.3.1] - 2026-11-28
+
+Robustness audit and hardening release (see ADR-024). One chaptering output change, so
+`PIPELINE_VERSION` moves to `0.3.1` together with the package version; block indices and all
+corpus boundaries are unchanged.
+
+### Fixed
+
+- Chapter bodies after a fragment cut no longer lose their first subheading: only the block the
+  cut starts on is treated as the spoken title. Previously, a nav anchor landing on a body
+  paragraph made the next `<h2>` vanish from the narration (chaptering semantic change).
+- Ctrl-C / SIGINT now cancels queued synthesis and returns immediately instead of waiting for
+  the whole pending queue; at most `--jobs` in-flight segments finish their current call.
+- When a later chaptering run produces fewer chapters (strategy switch, dedupe/merge), orphaned
+  segment rows of removed chapters are pruned instead of being re-synthesized forever.
+- `run` takes the book lock *before* rewriting the database, and a held lock now fails fast
+  with exit code 1 and a clear message instead of "unexpected error".
+- `--rate 0`, `--jobs 0`, `--max-retries 0` are rejected with exit code 1 instead of being
+  silently clamped later.
+- `inspect` no longer downgrades the book status: a finished ("done"), partial or failed book
+  keeps its status after a fresh `inspect` re-records the chapter plan.
+- Artifact freshness now also covers `language`, `faststart` and `aac_profile`; M4B files built
+  before these fields were recorded are rebuilt once.
+- `Timeline` milliseconds are computed with the timeline's own sample rate (the constant 24 kHz
+  happened to match every current code path).
+- Non-JPEG/PNG covers (webp/gif/bmp) are transcoded to MJPEG before being attached; `-c:v copy`
+  into MP4 previously failed for these formats.
+
+### Changed
+
+- `assemble_m4b` verifies the produced M4B's chapter timeline against ffprobe (150 ms tolerance)
+  and reports drift as warnings, so the acceptance-table guarantee is enforced on real runs, not
+  only in tests.
+- The Kokoro backend loads its model lazily on first synthesis; constructing it for the CLI's
+  `info()` probe no longer holds a copy of the model for the whole run.
+- CI gains a `ruff check src tests scripts` lint job; `ruff` is part of the `dev` extra.
+- Dead API surface removed: `pipeline.synth_identity`, `db.get_chapter`, `db.set_chapter_status`,
+  `util.hashing.short_hash`, `models.BlockRef`, `models.SynthResult`,
+  `SegmentPolicy.with_overrides`, and the never-consumed policy fields
+  `anchor_prefix_chars` / `heading_levels` / `max_toc_depth` / `short_paragraph_chars` /
+  `min_chars`. No behaviour change; cache keys are unaffected.
+
+### Measured
+
+- Block indices unchanged: local corpus `.boundaries` files keep every line, only their
+  `# pipeline` header moved to `0.3.1`. Chapter-content F1 evaluation is unaffected by this
+  release because boundaries did not move.
+
 ## [0.3.0] - 2026-11-25
 
 Chapter-selection semantics changed, so `PIPELINE_VERSION` moves to `0.3.0` together with the
@@ -205,6 +253,8 @@ First release.
 - Multiple book sources inside one EPUB and complex CSS pagination are not specifically
   handled.
 
+[0.3.1]: https://github.com/whoamiWo/book2sound/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/whoamiWo/book2sound/releases/tag/v0.3.0
 [0.1.3]: https://github.com/whoamiWo/book2sound/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/whoamiWo/book2sound/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/whoamiWo/book2sound/compare/v0.1.0...v0.1.1

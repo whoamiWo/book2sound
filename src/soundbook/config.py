@@ -15,12 +15,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from soundbook import AUDIO_FORMAT_VERSION, PIPELINE_VERSION
-
 
 # --------------------------------------------------------------------------
 # policies
@@ -36,9 +35,6 @@ class ChapteringPolicy:
     median_chars_min_chapters: int = 20
     single_chapter_max_chars: int = 20_000
     min_nav_entries: int = 3
-    anchor_prefix_chars: int = 20
-    heading_levels: tuple[int, ...] = (1, 2, 3)
-    max_toc_depth: int = 6
     front_matter_window: int = 2
     back_matter_window: int = 1
 
@@ -48,7 +44,6 @@ class CleanPolicy:
     header_min_repeats: int = 3
     header_max_chars: int = 30
     page_number_max_chars: int = 12
-    short_paragraph_chars: int = 5
     strip_footnote_markers: bool = True
     normalize_punctuation: bool = True
     warning_min_chars: int = 200
@@ -57,18 +52,14 @@ class CleanPolicy:
 
 @dataclass(frozen=True)
 class SegmentPolicy:
-    """Pure segmentation parameters (ADR-012). Never read at runtime."""
+    """Pure segmentation parameters (ADR-012): reads no runtime state."""
 
     target_chars: int = 90
     hard_max_chars: int = 300
-    min_chars: int = 1
     sentence_pause_ms: int = 220
     paragraph_pause_ms: int = 500
     chapter_pause_ms: int = 1200
     speak_titles: bool = True
-
-    def with_overrides(self, **kwargs: Any) -> "SegmentPolicy":
-        return replace(self, **{k: v for k, v in kwargs.items() if v is not None})
 
 
 @dataclass(frozen=True)

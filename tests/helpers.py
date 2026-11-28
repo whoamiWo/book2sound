@@ -92,7 +92,7 @@ def make_epub(
 
     if image_only:
         # replace all text with a single image per page
-        for idx, chapter in enumerate(chapters):
+        for idx, _chapter in enumerate(chapters):
             files[f"OEBPS/Text/ch{idx + 1}.xhtml"] = (
                 '<?xml version="1.0" encoding="utf-8"?>\n'
                 '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>p</title></head>'

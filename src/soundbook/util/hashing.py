@@ -16,7 +16,3 @@ def sha256_file(path: str | Path, chunk_size: int = 1 << 20) -> str:
         for chunk in iter(lambda: handle.read(chunk_size), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def short_hash(value: str, length: int = 12) -> str:
-    return value[:length]

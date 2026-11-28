@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from soundbook.ingest.anchors import resolve_anchor
-from soundbook.ingest.loader import Document, DocBlock, load_book
 from helpers import CHINESE_PARAGRAPHS, make_epub, simple_book
+
+from soundbook.ingest.anchors import resolve_anchor
+from soundbook.ingest.loader import DocBlock, Document, load_book
 
 
 def _doc(payload: bytes = b"") -> Document:
@@ -102,9 +103,10 @@ def test_loader_stores_chapter_payload(tmp_path):
 
 def test_fragment_anchor_not_resolved_to_doc_start(tmp_path):
     """Chaptering must cut at the anchor block, never fall back to block 0."""
+    from helpers import Chapter
+
     from soundbook.config import ChapteringPolicy
     from soundbook.ingest.chaptering import choose_strategy
-    from helpers import Chapter
 
     chapters = [Chapter(f"第{i + 1}章 标题", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
     chapters[1].anchor = "half"

@@ -131,3 +131,29 @@ ffprobe -v error -show_entries format=duration .scratch/ab-path-c/ab-j1.m4b
     epub2m4b-kokoro run sample.epub --tts kokoro -o sample.m4b
   ```
 - 首次构建较慢的两个原因：ffmpeg 带来 133 MB apt 包（deb.debian.org 当时约 50 kB/s）；PyPI 默认的 torch 2.15.0 附带约 3 GB CUDA（`nvidia-*`）wheel。镜像最终约 10.5 GB。
+
+## 0.3.1 Kokoro 复验
+
+日期：2026-11-28。为覆盖 ADR-024 的 Kokoro 惰性加载改动，在 0.1.0 的 `epub2m4b-kokoro`
+镜像（Python 3.12、kokoro 0.9.4、torch 2.15.0+cu132）中以只读挂载方式替换为 0.3.1 源码运行，
+没有重新下载 10 GB 依赖。环境变量 `HF_ENDPOINT=https://hf-mirror.com`、`HF_HUB_DISABLE_XET=1`。
+
+```bash
+docker run --rm --entrypoint python \
+  -v /tmp/kokoro031:/data \
+  -v "$PWD/src/soundbook:/usr/local/lib/python3.12/site-packages/soundbook:ro" \
+  -e HF_ENDPOINT=https://hf-mirror.com -e HF_HUB_DISABLE_XET=1 \
+  epub2m4b-kokoro:latest -c 'from soundbook.cli import main; main()' \
+  run /data/tiny.epub --tts kokoro --voice zf_xiaobei -o /data/tiny.m4b
+```
+
+| 项 | 观测值 |
+| --- | --- |
+| 样本 | 2 章 × 3 段长文本，8 个合成段（含 2 个标题段） |
+| 合成结果 | `synth: 5 new, 3 cached, 0 failed` |
+| 输出 | AAC 24 kHz 单声道，总时长 109.250 s |
+| 章节起点（ffprobe） | 0.000 / 54.625 s，与内部时间轴一致，无 150 ms 校验警告 |
+
+该次运行同时验证了：构造后端不再提前加载模型（只有 8 段、进程正常退出）、
+loudnorm 与章节时间轴自校验在真实音频上通过。样本较小，仅作功能复验，不推算 RTF；
+CPU 吞吐仍以「Kokoro 吞吐 A/B」一节为准。

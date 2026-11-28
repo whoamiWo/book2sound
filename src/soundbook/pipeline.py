@@ -11,14 +11,14 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from soundbook.assemble.m4b import AssembleResult, assemble_m4b
-from soundbook.config import Policies, audio_key as make_audio_key
-from soundbook.config import cache_dir, work_dir
+from soundbook.config import Policies, audio_path, cache_dir, work_dir
+from soundbook.config import audio_key as make_audio_key
 from soundbook.db import (
     book_complete,
     mark_done,
@@ -36,10 +36,8 @@ from soundbook.ingest.clean import clean_paragraphs, repeated_headers, warnings_
 from soundbook.ingest.loader import ParsedBook, load_book
 from soundbook.models import ChapterDraft, SegmentDraft
 from soundbook.segment.segmenter import segment_chapter
-from soundbook.tts.base import synth_fingerprint_for
 from soundbook.util.audio import flac_total_samples, pcm_to_flac
 from soundbook.util.disk import check_space
-
 
 ANCHOR_REASON_PREFIX = "anchor_"
 
@@ -88,8 +86,14 @@ def prepare(
     synth_fp: str | None = None,
 ) -> Prepared:
     book = load_book(path)
+    prior = db.execute("SELECT status FROM books WHERE book_id=?",
+                       (book.info.book_id,)).fetchone()
+    prior_status = prior["status"] if prior else None
     upsert_book(db, book.info, status="parsing")
-    set_book_meta(db, book.info.book_id, status="parsing")
+    if write_segments:
+        # ``inspect`` records the chapter plan but must not claim the book is
+        # being (re)synthesized: preserve the previous status in that case.
+        set_book_meta(db, book.info.book_id, status="parsing")
 
     strategy, drafts = choose_strategy(book, policies.chaptering)
     classify_skippable(drafts, policies.chaptering)
@@ -116,8 +120,11 @@ def prepare(
         for plan in plans:
             reconcile_segments(db, book.info.book_id, plan.draft.idx, plan.segments,
                                synth_fp, make_audio_key)
+    final_status = "ready"
+    if not write_segments and prior_status in {"ready", "done", "partial", "failed"}:
+        final_status = prior_status
     set_book_meta(db, book.info.book_id, strategy=strategy, n_chapters=len(drafts),
-                  status="ready")
+                  status=final_status)
     db.commit()
     return Prepared(book=book, strategy=strategy, chapters=plans)
 
@@ -189,7 +196,7 @@ def synthesize(
 
     def work(row) -> dict:
         key = make_audio_key(row["text"], synth_fp)
-        target = cache_dir() / key[:2] / f"{key}.flac"
+        target = audio_path(key)
         # A cached FLAC from an earlier run is reused verbatim: switching back
         # to a previous voice must cost zero synthesis (plan §5).
         if target.is_file():
@@ -220,28 +227,36 @@ def synthesize(
         return {"row": row, "key": key, "path": None, "n_samples": None,
                 "error": last_error, "cached": False}
 
+    pool = ThreadPoolExecutor(max_workers=max(1, jobs))
+    futures = [pool.submit(work, row) for row in rows]
     try:
-        with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-            futures = [pool.submit(work, row) for row in rows]
-            for future in as_completed(futures):
-                result = future.result()
-                row = result["row"]
-                if result["error"]:
-                    mark_failed(db, book_id, row["chapter_idx"], row["seg_idx"],
-                                result["error"], terminal=True)
-                    report.failed.append((row["chapter_idx"], row["seg_idx"],
-                                          result["error"]))
-                else:
-                    mark_done(db, book_id, row["chapter_idx"], row["seg_idx"],
-                              result["key"], result["path"], result["n_samples"])
-                    report.done += 1
-                    if result.get("cached"):
-                        report.cached += 1
-                db.commit()
-                if progress:
-                    progress(report.done + len(report.failed), report.total)
-    except KeyboardInterrupt:  # pragma: no cover - CLI maps this to 130
+        for future in as_completed(futures):
+            result = future.result()
+            row = result["row"]
+            if result["error"]:
+                mark_failed(db, book_id, row["chapter_idx"], row["seg_idx"],
+                            result["error"], terminal=True)
+                report.failed.append((row["chapter_idx"], row["seg_idx"],
+                                      result["error"]))
+            else:
+                mark_done(db, book_id, row["chapter_idx"], row["seg_idx"],
+                          result["key"], result["path"], result["n_samples"])
+                report.done += 1
+                if result.get("cached"):
+                    report.cached += 1
+            db.commit()
+            if progress:
+                progress(report.done + len(report.failed), report.total)
+    except BaseException:  # pragma: no cover - CLI maps this to 130
+        # Interrupt must not wait for every queued segment: cancel pending
+        # futures and return immediately; the at-most ``jobs`` running
+        # tasks finish on their own (threads cannot be killed in Python).
+        for future in futures:
+            future.cancel()
+        pool.shutdown(wait=False, cancel_futures=True)
         raise
+    else:
+        pool.shutdown(wait=True)
     return report
 
 
@@ -295,6 +310,7 @@ def build_artifact(
             "bitrate": policies.audio.bitrate,
             "sample_rate": policies.audio.sample_rate,
             "channels": policies.audio.channels,
+            "aac_profile": policies.audio.aac_profile,
             "language": policies.audio.language,
             "faststart": policies.audio.faststart,
             "loudnorm": policies.audio.loudnorm,
@@ -322,14 +338,9 @@ def content_signature(db: sqlite3.Connection, book_id: str) -> str:
         (book_id,)):
         digest.update(
             f"{row['chapter_idx']}|{row['seg_idx']}|{row['audio_key']}"
-            f"|{row['n_samples']}|{row['pause_after_ms']}\n".encode("utf-8"))
+            f"|{row['n_samples']}|{row['pause_after_ms']}\n".encode())
     return digest.hexdigest()
 
 
 def all_done(db: sqlite3.Connection, book_id: str) -> bool:
     return book_complete(db, book_id)
-
-
-def synth_identity(backend, config) -> tuple[str, str]:
-    info = backend.info()
-    return synth_fingerprint_for(info, config), info.voice

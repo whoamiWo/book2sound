@@ -7,19 +7,16 @@ Exit codes: 0 success · 1 general error · 2 failed/incomplete segments ·
 from __future__ import annotations
 
 import json
-import os
 import shutil
-import sys
+from dataclasses import replace
 from pathlib import Path
 
 import click
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
-from soundbook import DIST_NAME, PIPELINE_VERSION, __version__
-from soundbook import config
+from soundbook import DIST_NAME, PIPELINE_VERSION, __version__, config
 from soundbook.config import AudioPolicy, Policies, SegmentPolicy, TTSConfig
 from soundbook.db import (
-    book_complete,
     connect,
     done_segments,
     failed_segments,
@@ -28,7 +25,7 @@ from soundbook.db import (
     segment_counts,
     set_book_meta,
 )
-from soundbook.ingest.loader import UnusableBook, load_book
+from soundbook.ingest.loader import UnusableBook, book_id_from_path
 from soundbook.pipeline import (
     all_done,
     build_artifact,
@@ -49,15 +46,10 @@ EXIT_DISK = 5
 
 
 def _policies(bitrate: str | None, loudnorm: bool, speak_titles: bool) -> Policies:
-    audio = AudioPolicy(bitrate=bitrate) if bitrate else AudioPolicy()
-    audio = AudioPolicy(
-        bitrate=audio.bitrate, loudnorm=loudnorm, sample_rate=audio.sample_rate,
-        channels=audio.channels, loudnorm_i=audio.loudnorm_i, loudnorm_tp=audio.loudnorm_tp,
-        loudnorm_lra=audio.loudnorm_lra, aac_profile=audio.aac_profile,
-        language=audio.language, faststart=audio.faststart,
-    )
-    segment = SegmentPolicy(speak_titles=speak_titles)
-    return Policies(audio=audio, segment=segment)
+    audio = AudioPolicy(loudnorm=loudnorm)
+    if bitrate:
+        audio = replace(audio, bitrate=bitrate)
+    return Policies(audio=audio, segment=SegmentPolicy(speak_titles=speak_titles))
 
 
 def _fail(message: str, code: int) -> None:
@@ -78,6 +70,9 @@ def _artifact_is_fresh(artifact, sig: str, policies: Policies,
         and opts.get("bitrate") == audio.bitrate
         and opts.get("sample_rate") == audio.sample_rate
         and opts.get("channels") == audio.channels
+        and opts.get("language") == audio.language
+        and opts.get("faststart") == audio.faststart
+        and opts.get("aac_profile") == audio.aac_profile
         and opts.get("loudnorm") == audio.loudnorm
         and opts.get("loudnorm_i") == audio.loudnorm_i
         and opts.get("loudnorm_tp") == audio.loudnorm_tp
@@ -134,8 +129,8 @@ def _doctor_report() -> tuple[list[str], list[str]]:
         bad.append(f"cache: {cache} unavailable ({exc})")
 
     try:
-        import lxml  # noqa: F401
         import epubx  # noqa: F401
+        import lxml  # noqa: F401
 
         ok.append(f"epubx: {epubx.__version__}")
     except Exception as exc:  # noqa: BLE001
@@ -269,7 +264,7 @@ def status(book: str | None) -> None:
         counts = segment_counts(db, book_id)
         click.echo(f"{row['title']}  [{row['status']}]  {row['n_chapters']} chapters  "
                    f"strategy={row['strategy']}")
-        click.echo(f"  segments: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+        click.echo("  segments: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
         artifact = get_artifact(db, book_id)
         if artifact:
             click.echo(f"  output:   {artifact['output_path']} "
@@ -343,6 +338,15 @@ def voices(lang_code: str | None, as_json: bool) -> None:
 # --------------------------------------------------------------------------
 
 
+def _validate_run_options(rate: float, jobs: int, max_retries: int) -> None:
+    if rate <= 0:
+        _fail(f"--rate must be positive, got {rate}", EXIT_ERROR)
+    if jobs < 1:
+        _fail(f"--jobs must be at least 1, got {jobs}", EXIT_ERROR)
+    if max_retries < 1:
+        _fail(f"--max-retries must be at least 1, got {max_retries}", EXIT_ERROR)
+
+
 @cli.command()
 @click.argument("book", type=click.Path(exists=True, dir_okay=False))
 @click.option("--out", "-o", type=click.Path(dir_okay=False), help="output .m4b path")
@@ -372,6 +376,7 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
         for line in bad:
             click.echo(f"FAIL {line}", err=True)
         raise SystemExit(EXIT_ERROR)
+    _validate_run_options(rate, jobs, max_retries)
 
     policies = _policies(bitrate, not no_loudnorm, not no_speak_titles)
     tts_config = TTSConfig(backend=tts_name, voice=voice, rate=rate, jobs=jobs,
@@ -392,16 +397,27 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
             return
         synth_fp = synth_fingerprint_for(info, tts_config)
 
+        # Take the book lock before touching the database: prepare() rewrites
+        # chapters/segments, so two processes must never parse concurrently.
+        book_id = book_id_from_path(book_path)
+        lock = FileLock(str(config.locks_dir() / f"{book_id}.lock"))
+        try:
+            lock.acquire(timeout=0)
+        except Timeout:
+            _fail(f"another {DIST_NAME} process is already working on this book "
+                  f"(lock: {lock.lock_file})", EXIT_ERROR)
+            return
+
         prepared = prepare(db, book_path, policies,
                            include_skippable=include_front_matter,
                            write_segments=True, synth_fp=synth_fp)
-        book_id = prepared.book.info.book_id
+        if book_id != prepared.book.info.book_id:
+            _fail("the EPUB changed while it was being read; rerun", EXIT_ERROR)
+            return
         for plan in prepared.chapters:
             for text in plan.warnings:
                 if text.startswith("anchor_"):
                     click.echo(f"warning: chapter {plan.draft.idx}: {text}", err=True)
-        lock = FileLock(str(config.locks_dir() / f"{book_id}.lock"))
-        lock.acquire(timeout=0)
 
         reset = verify_cached_segments(db, book_id)
         if reset:
@@ -415,8 +431,8 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
             db, book_id,
             backend_factory=lambda: make_backend(tts_name, tts_config),
             synth_fp=synth_fp,
-            jobs=max(1, jobs),
-            max_retries=max(1, max_retries),
+            jobs=jobs,
+            max_retries=max_retries,
             progress=progress,
         )
         if report.total:
@@ -474,7 +490,7 @@ def run(book: str, out: str | None, tts_name: str, voice: str | None, rate: floa
         _fail(str(exc), EXIT_DISK)
     except KeyboardInterrupt:
         click.echo("interrupted", err=True)
-        raise SystemExit(130)
+        raise SystemExit(130) from None
     finally:
         if lock is not None and lock.is_locked:
             lock.release()
@@ -488,7 +504,7 @@ def main() -> None:
         raise
     except Exception as exc:  # noqa: BLE001 - last-resort exit code
         click.echo(f"{DIST_NAME}: unexpected error: {exc}", err=True)
-        raise SystemExit(EXIT_ERROR)
+        raise SystemExit(EXIT_ERROR) from None
 
 
 if __name__ == "__main__":  # pragma: no cover

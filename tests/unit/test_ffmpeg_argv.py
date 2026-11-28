@@ -36,6 +36,19 @@ def test_cover_attached_pic():
     assert argv[argv.index("-disposition:v:0") + 1] == "attached_pic"
 
 
+def test_png_cover_is_copied():
+    argv = _argv(cover="cover.png")
+    assert argv[argv.index("-c:v") + 1] == "copy"
+
+
+@pytest.mark.parametrize("cover", ["cover.webp", "cover.gif", "cover.bmp", "cover.img"])
+def test_other_cover_formats_are_transcoded(cover):
+    argv = _argv(cover=cover)
+    assert argv[argv.index("-c:v") + 1] == "mjpeg"
+    assert argv[argv.index("-q:v") + 1] == "2"
+    assert argv[argv.index("-disposition:v:0") + 1] == "attached_pic"
+
+
 def test_loudnorm_applied():
     argv = _argv(loudnorm_params=PARAMS)
     joined = " ".join(argv)

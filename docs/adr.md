@@ -170,3 +170,30 @@ v5 计划 §3.9 把 spike 3 降级为安装检查：`soundfile` 不可用则段�
 - **`书目` 移出全篇规则**：`书目` 从 `NON_READING_KEYWORDS` 移到 `BACK_KEYWORDS`，中段书目作为可听附录保留，只有落在后置窗口内才跳过。`参考文献` 同样保持窗口规则。
 - **全跳过保护**：分类结束后若 `all(d.skippable)`，清空所有 `skippable`。skippable 章节不生成分段（`pipeline.py` 的 `if include_skippable or not draft.skippable`），整本被跳过会让 `run` 以“nothing was synthesized; there is no audio to package”退出码 2；宁可多合成一章，也不产出空结果。该事件不新增 warnings 通道（`classify_skippable` 先于 `ChapterPlan.warnings` 构建，改动签名超出本轮最小修复），只在 docstring 与本 ADR 固定。
 - **语料与版本**：5 本复测 F1 仍全部 `1.000`；`3b10558e` 的“已出书目”由 skippable 改为正文，金标相应去掉 `[skippable]`（标注口径随规则更新，不是回退代码）。这是分章选择语义变化，`PIPELINE_VERSION` 升 `0.3.0`（包版本同步）；块索引未变，金标版本头统一更新到 `0.3.0`。
+
+## ADR-024 运行鲁棒性：锁前置、孤儿段清理、惰性模型加载与中断即取消
+
+2026-11-28。审计发现四处与既有决定相悖的实现缺陷，一并固定处理方式。
+
+- **锁前置**：`run` 原本在 `prepare()` 之后才取书级锁，两个并发进程会同时重写 `chapters`/`segments`。
+  现在先用 `book_id_from_path`（与 `prepare` 同源的 sha256）算 book_id，取锁成功后再写库；
+  锁被占时以退出码 1 报“another epub2m4b process is already working on this book”，不再走
+  `main()` 的兜底“unexpected error”。
+- **孤儿段清理**：章节数减少（策略切换/合并/去重）后，旧 `segments` 行无任何 chapter 归属，
+  会被 `pending_segments` 反复捞起重做。`replace_chapters` 末尾删除
+  `chapter_idx NOT IN (SELECT ... FROM chapters)` 的段行；段 FLAC 仍在内容寻址缓存里，
+  文本再现时零合成复用（ADR-013 语义不变）。
+- **标题只砍“切点所在块”**：`_build_drafts` 原先丢弃跨度内遇到的第一个 heading，fragment
+  锚点落在正文段落时会把随后的 `<h2>` 当章节标题静默吞掉。现改为仅当切点块本身是
+  heading 才跳过。这改变 fragment 切分书目的章节正文，属分章输出语义变化：
+  `PIPELINE_VERSION` 升 `0.3.1`（包版本同步）；边界（`start_key`）不变，本地金标只更新版本头。
+- **Kokoro 惰性加载**：`run` 为读 `EngineInfo` 构造的探针实例原先就把 KPipeline 加载进内存，
+  合成 worker 又各自加载一份，jobs=1 时整本书运行期间内存里存在两份模型。
+  改为构造与 `info()` 均不建 pipeline（`info()` 只 import kokoro 取版本，保持 exit 4 语义），
+  首次 `synth` 才加载。
+- **中断即取消**：`ThreadPoolExecutor` 上下文退出会等待全部已提交任务，Ctrl-C 形同虚设。
+  捕获 `BaseException` 后 `cancel()` 未开始任务并 `shutdown(wait=False, cancel_futures=True)`；
+  最多 `jobs` 个进行中的段按 Python 线程语义跑完当前合成，队列不再继续。
+- **成品自校验**：`assemble_m4b` 写完 M4B 后即跑 `verify_output`（ffprobe，150 ms 容差），
+  偏差进入 `AssembleResult.warnings` 由 CLI 打印，而不是只在测试里校验（接受表 §5 的运行期落地）。
+  非 JPEG/PNG 封面（webp/gif/bmp）转码为 MJPEG 再作 attached_pic，避免 mp4 muxer 直接失败。

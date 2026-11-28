@@ -87,6 +87,7 @@ Two practical notes:
 python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install -e ".[dev]"
 pytest                    # unit + e2e (real ffmpeg, --tts fake)
+ruff check src tests scripts
 pytest -m e2e             # only end-to-end
 SOUNDBOOK_CORPUS=/path/to/epubs pytest -m corpus -s  # optional local real-book evaluation
 ```

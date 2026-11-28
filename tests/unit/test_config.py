@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from soundbook.config import (
-    AudioPolicy,
     SegmentPolicy,
     audio_key,
     canonical_json,

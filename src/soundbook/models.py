@@ -23,18 +23,6 @@ class BookInfo:
 
 
 @dataclass(frozen=True)
-class BlockRef:
-    """A position in the book: spine document plus ordinal within it."""
-
-    spine_href: str
-    chapter_index: int
-    block_idx: int
-
-    def key(self) -> str:
-        return f"{self.spine_href}|{self.block_idx}"
-
-
-@dataclass(frozen=True)
 class Rejection:
     strategy: str
     reason: str
@@ -79,16 +67,6 @@ class SegmentDraft:
     text: str
     pause_after_ms: int
     is_title: bool = False
-
-
-@dataclass(frozen=True)
-class SynthResult:
-    """Raw audio produced by a backend, always 24 kHz mono 16-bit PCM."""
-
-    pcm: bytes
-    sample_rate: int
-    channels: int
-    n_samples: int
 
 
 @dataclass(frozen=True)

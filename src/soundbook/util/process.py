@@ -40,8 +40,7 @@ def run(argv: list[str], *, stdin: bytes | None = None, check: bool = True) -> C
     proc = subprocess.run(
         argv,
         input=stdin,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     result = CommandResult(argv=list(argv), returncode=proc.returncode,

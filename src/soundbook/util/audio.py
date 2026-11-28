@@ -54,8 +54,10 @@ def pcm_to_flac(
     target.parent.mkdir(parents=True, exist_ok=True)
     if len(pcm) % (SAMPLE_WIDTH * channels):
         raise AudioError("PCM payload is not a whole number of frames")
-    want = expected_samples if expected_samples is not None else len(pcm) // (SAMPLE_WIDTH * channels)
-    fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    want = (expected_samples if expected_samples is not None
+            else len(pcm) // (SAMPLE_WIDTH * channels))
+    fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp",
+                                    dir=target.parent)
     os.close(fd)
     try:
         argv = [
@@ -83,12 +85,14 @@ def silence_pcm(n_samples: int, *, channels: int = CHANNELS) -> bytes:
     return b"\x00\x00" * (n_samples * channels)
 
 
-def write_silence_flac(path: str | Path, n_samples: int, *, sample_rate: int = SAMPLE_RATE) -> Path:
+def write_silence_flac(path: str | Path, n_samples: int, *,
+                       sample_rate: int = SAMPLE_RATE) -> Path:
     return pcm_to_flac(silence_pcm(n_samples), path, sample_rate=sample_rate,
                        expected_samples=n_samples)
 
 
-def decode_to_pcm(data: bytes, *, sample_rate: int = SAMPLE_RATE, channels: int = CHANNELS) -> bytes:
+def decode_to_pcm(data: bytes, *, sample_rate: int = SAMPLE_RATE,
+                  channels: int = CHANNELS) -> bytes:
     """Decode/resample arbitrary container bytes (e.g. WAV from an HTTP TTS) to PCM."""
 
     fd, tmp_name = tempfile.mkstemp(prefix="epub2m4b-in-", suffix=".audio")

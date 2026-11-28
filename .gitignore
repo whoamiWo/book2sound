@@ -18,3 +18,6 @@ tests/fixtures/*.cover
 *.sqlite-*
 # local real-book corpus never enters the repo (legal rule)
 /corpus/
+
+# local planning scratch (agent tooling)
+/.kilo/

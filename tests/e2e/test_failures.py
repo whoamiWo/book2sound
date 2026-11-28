@@ -44,8 +44,9 @@ def test_segment_failure_marks_terminal_and_exits_2(home, monkeypatch):
     from helpers import Chapter, make_epub
 
     chapters = [
-        Chapter(f"第{i + 1}章 测试", [f"第{i + 1}章正文第一段，这里写一些足够长的内容来避免被当成辅文。" * 12,
-                                     f"第{i + 1}章正文第二段，继续写足够长的内容以避免辅文判定。" * 12])
+        Chapter(f"第{i + 1}章 测试",
+                [f"第{i + 1}章正文第一段，这里写一些足够长的内容来避免被当成辅文。" * 12,
+                 f"第{i + 1}章正文第二段，继续写足够长的内容以避免辅文判定。" * 12])
         for i in range(4)
     ]
     chapters[2].paragraphs[0] = "这一章会引爆引擎，合成必然失败，这里再加一些字让它足够长。" * 12
@@ -85,8 +86,9 @@ def test_allow_incomplete_packages_partial_book_and_still_exits_2(home, monkeypa
     from helpers import Chapter, make_epub
 
     chapters = [
-        Chapter(f"第{i + 1}章 测试", [f"第{i + 1}章正文第一段，这里写一些足够长的内容来避免被当成辅文。" * 12,
-                                     f"第{i + 1}章正文第二段，继续写足够长的内容以避免辅文判定。" * 12])
+        Chapter(f"第{i + 1}章 测试",
+                [f"第{i + 1}章正文第一段，这里写一些足够长的内容来避免被当成辅文。" * 12,
+                 f"第{i + 1}章正文第二段，继续写足够长的内容以避免辅文判定。" * 12])
         for i in range(4)
     ]
     chapters[1].paragraphs[1] = "这里也会引爆引擎，依然失败，这里再加一些字让它足够长。" * 12
@@ -116,8 +118,11 @@ def test_failed_segment_is_retried_on_next_run(home, monkeypatch):
 
     from helpers import Chapter, make_epub
 
-    chapters = [Chapter(f"第{i + 1}章 测试", [f"第{i + 1}章正文，这里写一些足够长的内容来避免被当成辅文。" * 12])
-                for i in range(3)]
+    chapters = [
+        Chapter(f"第{i + 1}章 测试",
+                [f"第{i + 1}章正文，这里写一些足够长的内容来避免被当成辅文。" * 12])
+        for i in range(3)
+    ]
     chapters[0].paragraphs[0] = "开头就引爆引擎，第一次必然失败，这里再加一些字让它足够长。" * 12
     book = make_epub(home / "retry.epub", chapters)
     out = home / "retry.m4b"

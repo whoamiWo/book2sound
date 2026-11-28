@@ -9,7 +9,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-BYTES_PER_CHAR_PCM = 48_000 / 4.5
 BYTES_PER_CHAR_FLAC = 5_800  # midpoint of 5.2–6.3 KiB, measured ratio pending
 BYTES_PER_CHAR_AAC = 8_000 / 4.5
 

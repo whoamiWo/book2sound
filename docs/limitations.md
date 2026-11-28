@@ -45,13 +45,13 @@
 - 段缓存键 = `sha256(text + NUL + synth_fingerprint)`；`synth_fingerprint` 包含 backend / model_id / model_version / voice / rate / sample_rate / AUDIO_FORMAT_VERSION。
 - 已存在的缓存 FLAC 直接复用，所以"换 voice 再换回来"是零合成；但上一次运行覆盖过输出文件时会重新封装一次。
 - 段文件丢失或采样数不符 → 该段自动回到 `pending`。
-- 书级锁 = `SOUNDBOOK_HOME/locks/<book_id>.lock`，非阻塞获取；两个进程同时跑同一本书时第二个直接失败。
+- 书级锁 = `SOUNDBOOK_HOME/locks/<book_id>.lock`，在写库前非阻塞获取；两个进程同时跑同一本书时第二个以退出码 1 明确报错。
 - 中断（SIGKILL）后已 `done` 的段不会丢；运行中的段在下次 `run` 时重做。
 
 ## 封装侧
 
 - loudnorm 两遍法在静音或测量不可用时降级为"loudnorm 关闭 + 警告"，不会产出坏文件。
-- 章节时间轴只累加整数采样数，最后换算毫秒；容差 150 ms（`verify_output`）。
+- 章节时间轴只累加整数采样数，最后换算毫秒；封装后立即用 `ffprobe` 复核章节起点（容差 150 ms），偏差以 warning 输出。
 - 封面以 `attached_pic` 复制进 M4B；无封面时纯音频。
 - 磁盘估算 = `5800 字节/字 × 待合成字数 + AAC 估重`，再乘 1.3；不足 → 退出码 5。
 - 本实现不处理"同一本书多版本输出"的并发写，仅依赖输出文件的原子 rename。

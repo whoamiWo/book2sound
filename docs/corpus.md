@@ -33,7 +33,7 @@ F1 只统计生产中会合成的非 skippable 章节；预测集先调用与 `r
 
 脚本在 EPUB 旁生成两个文件；已有金标时默认拒绝覆盖，确认需要重做时才加 `--force`：
 
-- `<stem>.boundaries`：预测边界草稿。首行 `# pipeline 0.3.0` 记录块索引所对应的
+- `<stem>.boundaries`：预测边界草稿。首行 `# pipeline 0.3.1` 记录块索引所对应的
   `PIPELINE_VERSION`，其后每行 `<zip-relative-href>|<block-index> # 预测章节标题`。
   与生产路径一致的 skippable 章节会在标题后标 `[skippable]`（例如
   `OEBPS/Text/ch1.xhtml|0 # 目录 [skippable]`），表示该行不会被计入 F1，不要把它当成漏切。

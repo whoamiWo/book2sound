@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import pytest
-
-from soundbook.ingest.loader import UnusableBook, load_book
 from helpers import (
+    CHINESE_PARAGRAPHS,
     FONT_ENCRYPTION,
     REAL_DRM,
     Chapter,
-    CHINESE_PARAGRAPHS,
     make_epub,
     simple_book,
 )
+
+from soundbook.ingest.loader import UnusableBook, load_book
 
 
 def test_simple_book_loads(tmp_path):

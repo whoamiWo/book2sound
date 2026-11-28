@@ -26,7 +26,6 @@ def _edit_chapter(path, *, chapter: int, old: str, new: str) -> None:
 
     import zipfile
 
-    from helpers import _xhtml  # type: ignore[attr-defined]
 
     src = path
     tmp = path.with_suffix(".tmp.epub")

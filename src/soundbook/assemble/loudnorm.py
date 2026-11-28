@@ -13,7 +13,7 @@ import math
 from pathlib import Path
 
 from soundbook.config import AudioPolicy
-from soundbook.util.process import CommandError, run
+from soundbook.util.process import run
 
 _KEYS = ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")
 

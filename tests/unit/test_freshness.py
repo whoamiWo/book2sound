@@ -15,6 +15,9 @@ def _artifact(**build_opts_overrides):
         "bitrate": "64k",
         "sample_rate": 24_000,
         "channels": 1,
+        "aac_profile": "aac_low",
+        "language": "zho",
+        "faststart": True,
         "loudnorm": True,
         "loudnorm_i": -18.0,
         "loudnorm_tp": -1.5,
@@ -55,6 +58,20 @@ def test_stale_when_sample_rate_or_channels_change():
                               _policies(sample_rate=48000), None) is False
     assert _artifact_is_fresh(_artifact(), "sig",
                               _policies(channels=2), None) is False
+
+
+def test_stale_when_language_or_faststart_or_profile_changes():
+    policies = _policies()
+    assert _artifact_is_fresh(_artifact(language="eng"), "sig", policies, None) is False
+    assert _artifact_is_fresh(_artifact(faststart=False), "sig", policies, None) is False
+    assert _artifact_is_fresh(_artifact(aac_profile="aac_he"), "sig",
+                              policies, None) is False
+
+
+def test_stale_when_build_opts_predate_a_field():
+    # Artifacts built before a field was recorded must be rebuilt once.
+    assert _artifact_is_fresh(_artifact(aac_profile=None), "sig",
+                              _policies(), None) is False
 
 
 def test_stale_when_cover_changes():

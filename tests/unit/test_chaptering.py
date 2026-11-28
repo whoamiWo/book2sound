@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from helpers import CHINESE_PARAGRAPHS, Chapter, make_epub, simple_book
+
 from soundbook.config import ChapteringPolicy
 from soundbook.ingest.chaptering import choose_strategy
 from soundbook.ingest.classify import classify_skippable
 from soundbook.ingest.loader import load_book
-from helpers import Chapter, CHINESE_PARAGRAPHS, make_epub, simple_book
 
 
 def test_nav_strategy_on_clean_book(tmp_path):
@@ -353,3 +354,27 @@ def test_path_c_normalizes_label_before_matching(tmp_path):
     rej = _rejection(drafts[2], "anchor_text_fallback")
     assert rej is not None
     assert rej.metrics["match"] == "exact"
+
+
+def test_cut_at_body_block_keeps_later_subheadings(tmp_path):
+    """A fragment anchor landing on a body paragraph must not eat the h2 after it.
+
+    Only the block the cut starts on can be the spoken title; the first
+    heading *inside* the chapter span is body content, not a title.
+    """
+
+    chapters = [Chapter(f"第{i + 1}章", CHINESE_PARAGRAPHS[:6]) for i in range(4)]
+    chapters[0].anchor = "mid"
+    chapters[0].anchor_paragraph = 0  # id on the first <p>, before the <h2>
+    chapters[0].headings = ["第一节 江湖"]
+    make_epub(tmp_path / "sub.epub", chapters,
+              nav_entries=[("第1章", "Text/ch1.xhtml"),
+                           ("第一节 江湖", "Text/ch1.xhtml#mid"),
+                           ("第2章", "Text/ch2.xhtml"),
+                           ("第3章", "Text/ch3.xhtml"),
+                           ("第4章", "Text/ch4.xhtml")])
+    book = load_book(tmp_path / "sub.epub")
+    strategy, drafts = choose_strategy(book, ChapteringPolicy())
+    assert strategy == "nav"
+    cut = next(d for d in drafts if d.start_key.endswith("ch1.xhtml|1"))
+    assert "第一节 江湖" in cut.paragraphs

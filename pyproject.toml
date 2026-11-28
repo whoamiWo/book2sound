@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "epub2m4b"
-version = "0.3.0"
+version = "0.3.1"
 description = "Chinese EPUB → chaptered M4B audiobook generator (CLI)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,7 +36,7 @@ Changelog = "https://github.com/whoamiWo/book2sound/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 kokoro = ["kokoro==0.9.4", "misaki[zh]==0.9.4"]
-dev = ["pytest", "soundfile"]
+dev = ["pytest", "soundfile", "ruff>=0.6"]
 
 [project.scripts]
 epub2m4b = "soundbook.cli:main"

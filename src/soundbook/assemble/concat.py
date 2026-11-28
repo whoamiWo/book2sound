@@ -23,6 +23,7 @@ SAMPLE_RATE = 24_000
 class Timeline:
     entries: list[TimelineEntry]
     spans: list[ChapterSpan]
+    sample_rate: int = SAMPLE_RATE
 
     @property
     def total_samples(self) -> int:
@@ -30,7 +31,11 @@ class Timeline:
 
     @property
     def total_ms(self) -> int:
-        return int(round(1000 * self.total_samples / SAMPLE_RATE))
+        return int(round(1000 * self.total_samples / self.sample_rate))
+
+
+def _ms(samples: int, sample_rate: int) -> int:
+    return int(round(1000 * samples / sample_rate))
 
 
 def build_timeline(db: sqlite3.Connection, book_id: str, work_dir: str,
@@ -61,11 +66,14 @@ def build_timeline(db: sqlite3.Connection, book_id: str, work_dir: str,
     current_title = ""
     span_start = 0
 
+    def ms(samples: int) -> int:
+        return _ms(samples, sample_rate)
+
     for row in rows:
         if row["chapter_idx"] != current:
             if current is not None:
                 spans.append(ChapterSpan(chapter_idx=current, title=current_title,
-                                         start_ms=_ms(span_start), end_ms=_ms(cum)))
+                                         start_ms=ms(span_start), end_ms=ms(cum)))
             current = row["chapter_idx"]
             current_title = row["chapter_title"] or ""
             span_start = cum
@@ -80,16 +88,12 @@ def build_timeline(db: sqlite3.Connection, book_id: str, work_dir: str,
             cum += sil_n
     if current is not None:
         spans.append(ChapterSpan(chapter_idx=current, title=current_title,
-                                 start_ms=_ms(span_start), end_ms=_ms(cum)))
-    return Timeline(entries=entries, spans=spans)
-
-
-def _ms(samples: int) -> int:
-    return int(round(1000 * samples / SAMPLE_RATE))
+                                 start_ms=ms(span_start), end_ms=ms(cum)))
+    return Timeline(entries=entries, spans=spans, sample_rate=sample_rate)
 
 
 def build_concat_list(entries: list[TimelineEntry]) -> str:
-    """Only ``file`` lines, absolute paths, single quotes doubled."""
+    """Only ``file`` lines, absolute paths, shell-style ``'\\''`` escaping."""
 
     lines: list[str] = []
     for entry in entries:

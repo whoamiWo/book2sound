@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import signal
 import sqlite3
 import subprocess
 import sys
@@ -10,7 +9,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from helpers import Chapter, make_epub
 
 pytestmark = pytest.mark.e2e

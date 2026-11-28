@@ -39,11 +39,9 @@ def test_run_fake_end_to_end(book_path, home):
 
 @need_ffmpeg
 def test_chapter_starts_match_timeline(book_path, home):
-    import sqlite3
-    from pathlib import Path
 
     from soundbook.assemble.concat import build_timeline
-    from soundbook.assemble.m4b import probe_chapters, verify_output
+    from soundbook.assemble.m4b import verify_output
     from soundbook.config import db_path
     from soundbook.db import connect
 
@@ -113,6 +111,64 @@ def test_doctor_never_fails_on_missing_inputs(home):
 
 
 @need_ffmpeg
+def test_inspect_does_not_downgrade_finished_status(book_path, home):
+    """After a successful run, `inspect` must not flip the book back to `ready`."""
+
+    out = home / "book.m4b"
+    result = _invoke(["run", str(book_path), "--tts", "fake", "-o", str(out)], home)
+    assert result.exit_code == 0, result.output
+
+    from soundbook.db import connect
+
+    db = connect(home / "home" / "state.sqlite")
+    status_row = db.execute("SELECT status FROM books").fetchone()
+    assert status_row["status"] == "done"
+    db.close()
+
+    inspected = _invoke(["inspect", str(book_path)], home)
+    assert inspected.exit_code == 0, inspected.output
+
+    db = connect(home / "home" / "state.sqlite")
+    status_row = db.execute("SELECT status FROM books").fetchone()
+    assert status_row["status"] == "done"
+    db.close()
+
+
+@need_ffmpeg
+def test_second_run_on_a_locked_book_exits_1(book_path, home):
+    """Book-level mutual exclusion must fail fast and clearly, not crash."""
+
+    from filelock import FileLock
+
+    from soundbook.util.hashing import sha256_file
+
+    locks = home / "home" / "locks"
+    locks.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(str(locks / f"{sha256_file(book_path)}.lock"))
+    lock.acquire(timeout=0)
+    try:
+        result = _invoke(
+            ["run", str(book_path), "--tts", "fake", "-o", str(home / "x.m4b")],
+            home)
+    finally:
+        lock.release()
+    assert result.exit_code == 1, result.output
+    assert "already working on this book" in result.output
+
+
+@need_ffmpeg
+@pytest.mark.parametrize("option", [
+    "--rate=0", "--rate=-1", "--jobs=0", "--max-retries=0",
+])
+def test_invalid_numeric_options_exit_1(book_path, home, option):
+    result = _invoke(
+        ["run", str(book_path), "--tts", "fake", option, "-o", str(home / "x.m4b")],
+        home)
+    assert result.exit_code == 1, result.output
+    assert "epub2m4b:" in result.output
+
+
+@need_ffmpeg
 def test_loudnorm_on_silence_is_skipped_with_warning(book_path, home):
     """Plan §3.1: two-pass loudnorm on silence must degrade, not crash."""
 
@@ -120,7 +176,7 @@ def test_loudnorm_on_silence_is_skipped_with_warning(book_path, home):
     from soundbook.config import Policies
     from soundbook.db import connect
     from soundbook.pipeline import build_artifact, prepare, synthesize
-    from soundbook.tts.base import make_backend, synth_fingerprint_for
+    from soundbook.tts.base import synth_fingerprint_for
     from soundbook.tts.fake import FakeBackend
 
     config.ensure_dirs()

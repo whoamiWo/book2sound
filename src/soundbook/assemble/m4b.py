@@ -66,7 +66,13 @@ def build_ffmpeg_argv(
         "-ac", str(audio.channels),
     ]
     if cover_index is not None:
-        argv += ["-c:v", "copy", "-disposition:v:0", "attached_pic"]
+        # MP4 accepts JPEG/PNG attached pictures verbatim; other formats
+        # (webp/gif/bmp) must be transcoded or the muxer rejects them.
+        if Path(cover or "").suffix.lower() in {".jpg", ".jpeg", ".png"}:
+            argv += ["-c:v", "copy"]
+        else:
+            argv += ["-c:v", "mjpeg", "-q:v", "2"]
+        argv += ["-disposition:v:0", "attached_pic"]
     if meta_index is not None:
         argv += ["-map_metadata", str(meta_index)]
     elif title:
@@ -163,6 +169,14 @@ def assemble_m4b(
             except OSError:  # pragma: no cover
                 pass
 
+    # The acceptance table (§5) promises chapter START accuracy; check it on
+    # the file we just wrote instead of relying on test-only verification.
+    try:
+        problems = verify_output(out, timeline.spans)
+    except (CommandError, OSError) as exc:  # pragma: no cover - ffprobe missing
+        problems = [f"could not verify chapter timeline: {exc}"]
+    warnings.extend(problems)
+
     fingerprint = _timeline_fingerprint(db, book_id, audio, params, cover_sha256, timeline)
     return AssembleResult(
         path=str(out),
@@ -187,7 +201,7 @@ def verify_output(path: str | Path, expected_spans, tolerance_ms: int = 150) -> 
     chapters = probe_chapters(path)
     if len(chapters) != len(expected_spans):
         problems.append(f"chapter count {len(chapters)} != expected {len(expected_spans)}")
-    for got, want in zip(chapters, expected_spans):
+    for got, want in zip(chapters, expected_spans, strict=False):
         start_ms = int(round(float(got["start_time"]) * 1000))
         if abs(start_ms - want.start_ms) > tolerance_ms:
             problems.append(

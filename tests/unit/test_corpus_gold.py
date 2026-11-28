@@ -8,7 +8,6 @@ import pytest
 from soundbook import PIPELINE_VERSION
 from soundbook.models import ChapterDraft
 
-
 _CORPUS_TEST = Path(__file__).parents[1] / "corpus" / "test_corpus.py"
 _spec = importlib.util.spec_from_file_location("corpus_gold_under_test", _CORPUS_TEST)
 assert _spec is not None and _spec.loader is not None

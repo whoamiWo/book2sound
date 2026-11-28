@@ -135,17 +135,22 @@ def replace_chapters(db: sqlite3.Connection, book_id: str,
         "UPDATE books SET n_chapters=?, updated_at=? WHERE book_id=?",
         (len(drafts), time.time(), book_id),
     )
+    # Chapters that vanished (e.g. strategy switch shrinking the book) leave
+    # orphaned segment rows that would otherwise be re-synthesized forever.
+    # Their FLAC stays in the content-addressed cache, so deleting the rows
+    # costs nothing if the same text comes back.
+    db.execute(
+        """
+        DELETE FROM segments WHERE book_id=? AND chapter_idx NOT IN
+            (SELECT chapter_idx FROM chapters WHERE book_id=?)
+        """,
+        (book_id, book_id),
+    )
 
 
 def get_chapters(db: sqlite3.Connection, book_id: str) -> list[sqlite3.Row]:
     return list(db.execute(
         "SELECT * FROM chapters WHERE book_id=? ORDER BY chapter_idx", (book_id,)))
-
-
-def get_chapter(db: sqlite3.Connection, book_id: str, chapter_idx: int) -> sqlite3.Row | None:
-    return db.execute(
-        "SELECT * FROM chapters WHERE book_id=? AND chapter_idx=?",
-        (book_id, chapter_idx)).fetchone()
 
 
 def reconcile_segments(
@@ -251,14 +256,6 @@ def mark_failed(db: sqlite3.Connection, book_id: str, chapter_idx: int, seg_idx:
         """,
         ("failed" if terminal else "pending", error, time.time(),
          book_id, chapter_idx, seg_idx),
-    )
-
-
-def set_chapter_status(db: sqlite3.Connection, book_id: str, chapter_idx: int,
-                       status: str) -> None:
-    db.execute(
-        "UPDATE chapters SET status=? WHERE book_id=? AND chapter_idx=?",
-        (status, book_id, chapter_idx),
     )
 
 

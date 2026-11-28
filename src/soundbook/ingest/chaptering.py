@@ -260,17 +260,19 @@ def _build_drafts(book: ParsedBook, candidates: list[_Candidate],
     drafts: list[ChapterDraft] = []
     n = len(keep)
     zh = (book.info.language or "").lower().startswith(("zh", "cmn", "yue"))
-    for i, (cand, flat) in enumerate(zip(keep, flat_starts)):
+    for i, (cand, flat) in enumerate(zip(keep, flat_starts, strict=False)):
         end_flat = flat_starts[i + 1] if i + 1 < n else len(positions)
         span = positions[flat:end_flat]
         paragraphs: list[str] = []
-        first_dropped = False
-        for p in span:
+        for offset, p in enumerate(span):
             block = book.documents[p.doc].block(p.block)
             if block is None:
                 continue
-            if not first_dropped and block.is_heading:
-                first_dropped = True  # the chapter title, spoken separately
+            # Only the block the cut starts on can be the chapter title (it is
+            # narrated separately). A later subheading belongs to the body;
+            # dropping the first heading of the span would silently delete it
+            # whenever the cut starts at a body block (fragment anchors).
+            if offset == 0 and block.is_heading:
                 continue
             paragraphs.append(block.text)
         start_key = cand.pos.key(book)

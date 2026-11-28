@@ -123,7 +123,8 @@ def build_epub(source: Path, output: Path, cover: Path) -> None:
     identifier = "urn:uuid:2a2cc6cc-777f-4f2b-9870-9c9abeb7f1b1"
     files: dict[str, bytes] = {}
     manifest = [
-        '<item id="cover-image" href="Images/cover.png" media-type="image/png" properties="cover-image"/>',
+        '<item id="cover-image" href="Images/cover.png" media-type="image/png" '
+        'properties="cover-image"/>',
         '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     ]
     spine = []
@@ -162,11 +163,11 @@ def build_epub(source: Path, output: Path, cover: Path) -> None:
         + "".join(spine) + "</spine></package>"
     ).encode()
     files["META-INF/container.xml"] = (
-        '<?xml version="1.0"?><container version="1.0" '
-        'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
-        '<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>'
-        '</rootfiles></container>'
-    ).encode()
+        b'<?xml version="1.0"?><container version="1.0" '
+        b'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+        b'<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>'
+        b'</rootfiles></container>'
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w") as archive:
         mimetype = zipfile.ZipInfo("mimetype")
@@ -178,7 +179,8 @@ def build_epub(source: Path, output: Path, cover: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, help="downloaded source Markdown; fetched if omitted")
+    parser.add_argument("--source", type=Path,
+                        help="downloaded source Markdown; fetched if omitted")
     parser.add_argument("--font", type=Path, help="local Chinese TTF/OTF for cover lettering")
     parser.add_argument("-o", "--output", type=Path, required=True)
     args = parser.parse_args()
